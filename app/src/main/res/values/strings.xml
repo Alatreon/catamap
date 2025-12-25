@@ -1,4 +1,13 @@
 <resources>
     <string name="app_name">CataMap</string>
     <string name="menu_description">Menu</string>
+    <string name="boussole">Boussole</string>
+    <string name="ajouter_une_carte">Ajouter une carte</string>
+    <string name="orienter_vers_le_nord">Orienter vers le nord</string>
+    <string name="rotation_manuelle">Rotation manuelle</string>
+    <string name="conomie_de_batterie">Économie de batterie</string>
+    <string name="dark_mode">Dark mode</string>
+    <string name="tourner_la_carte">Tourner la carte</string>
+    <string name="changer_de_carte">Changer de carte</string>
+    <string name="g_rer_les_cartes">Gérer les cartes</string>
 </resources>

@@ -1,25 +1,25 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_rotate_with_compass"
-        android:title="Tourner la carte"
+        android:title="@string/tourner_la_carte"
         android:checkable="true"
         android:checked="false"/>
     <item
         android:id="@+id/action_dark_mode"
-        android:title="Dark mode"
+        android:title="@string/dark_mode"
         android:checkable="true"
         android:checked="true" />
     <item
          android:id="@+id/action_battery_saver"
-         android:title="Économie de batterie"
+         android:title="@string/conomie_de_batterie"
          android:checkable="true" />
     <item
         android:id="@+id/action_manual_rotate"
-        android:title="Rotation manuelle"
+        android:title="@string/rotation_manuelle"
         android:checkable="true"
         android:checked="false"/>
     <item
         android:id="@+id/action_reset_rotation"
-        android:title="Orienter vers le nord"
+        android:title="@string/orienter_vers_le_nord"
         android:checkable="false" />
 </menu>

@@ -7,6 +7,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -23,22 +24,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var azimuthFiltered = 0f
     private lateinit var compassView: ImageView
     private var rotateWithCompass = false
-    lateinit var mapViewLight: SubsamplingScaleImageView
-    lateinit var mapViewDark: SubsamplingScaleImageView
-    lateinit var mapView: SubsamplingScaleImageView
+    lateinit var mapViewLight: AccessibleSubsamplingImageView
+    lateinit var mapViewDark: AccessibleSubsamplingImageView
+    lateinit var mapView: AccessibleSubsamplingImageView
     private var isUserInteracting = false
     private var darkModeEnabled = true
     private val adjustedMaps = mutableSetOf<SubsamplingScaleImageView>()
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
     private var lastMapRotationTime = 0L
-    private val mapRotationIntervalMs = 20L     // economie extreme : sensorUpdateIntervalMs = 100L
+    private val mapRotationIntervalMs = 20L
     private var lastSensorUpdateTime = 0L
-    private var sensorUpdateIntervalMs = 50L // economie extreme : sensorUpdateIntervalMs = 200L
+    private var sensorUpdateIntervalMs = 50L
     private var batterySaverEnabled = false
     private lateinit var rotationDetector: RotationGestureDetector
     private var manualRotateEnabled = false
-
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,10 +77,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        mapView.setOnTouchListener { _, event ->
-            rotationDetector.onTouchEvent(event)
-            false
-        }
+        setupRotationTouch(mapViewDark)
+        setupRotationTouch(mapViewLight)
     }
 
     private fun setupMapReadyListener(map: SubsamplingScaleImageView) {
@@ -95,6 +93,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onPreviewReleased() {}
             override fun onImageLoadError(e: Exception?) {}
         })
+    }
+
+    private fun setupRotationTouch(map: AccessibleSubsamplingImageView) {
+        map.setOnTouchListener { v, event ->
+            rotationDetector.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_UP) {
+                v.performClick()
+            }
+            false
+        }
     }
 
     private fun setupMapView(map: SubsamplingScaleImageView) {
@@ -175,11 +183,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun updateSensors() {
         sensorManager.unregisterListener(this)
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
-            // economie extreme : SENSOR_DELAY_NORMAL
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
         sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also {
-            // economie extreme : SENSOR_DELAY_NORMAL
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
     }
@@ -242,14 +248,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             val popup = PopupMenu(this, view)
             popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
 
-            // Toujours mettre à jour l'état des cases quand le menu s'ouvre
             popup.menu.findItem(R.id.action_rotate_with_compass).isChecked = rotateWithCompass
             popup.menu.findItem(R.id.action_dark_mode).isChecked = darkModeEnabled
             popup.menu.findItem(R.id.action_battery_saver).isChecked = batterySaverEnabled
             popup.menu.findItem(R.id.action_manual_rotate).isChecked = manualRotateEnabled
             popup.menu.findItem(R.id.action_reset_rotation).isVisible = manualRotateEnabled
-
-
 
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
@@ -257,7 +260,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         rotateWithCompass = !item.isChecked
                         item.isChecked = rotateWithCompass
 
-                        // Mutuellement exclusif avec la rotation manuelle
                         if (rotateWithCompass && manualRotateEnabled) {
                             manualRotateEnabled = false
                             popup.menu.findItem(R.id.action_manual_rotate).isChecked = false
@@ -266,18 +268,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         updateRotationAndCompass()
                         true
                     }
+
                     R.id.action_dark_mode -> {
                         val newValue = !item.isChecked
                         item.isChecked = newValue
                         setMapDarkMode(newValue)
                         true
                     }
+
                     R.id.action_manual_rotate -> {
                         val wasEnabled = manualRotateEnabled
                         manualRotateEnabled = !item.isChecked
                         item.isChecked = manualRotateEnabled
 
-                        // Mutuellement exclusif avec rotateWithCompass
                         if (manualRotateEnabled && rotateWithCompass) {
                             rotateWithCompass = false
                             popup.menu.findItem(R.id.action_rotate_with_compass).isChecked = false
@@ -289,11 +292,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                         true
                     }
+
                     R.id.action_battery_saver -> {
                         batterySaverEnabled = !item.isChecked
                         item.isChecked = batterySaverEnabled
 
-                        // Mutuellement exclusif
                         if (batterySaverEnabled && rotateWithCompass) {
                             rotateWithCompass = false
                             popup.menu.findItem(R.id.action_rotate_with_compass).isChecked = false
@@ -302,12 +305,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         updateRotationAndCompass()
                         true
                     }
+
                     R.id.action_reset_rotation -> {
                         if (manualRotateEnabled) {
                             resetMapRotation()
                         }
                         true
                     }
+
                     else -> false
                 }
             }
