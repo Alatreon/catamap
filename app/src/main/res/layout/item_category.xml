@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="12dp"
+    android:background="?android:selectableItemBackground">
+
+    <!-- Nom de la catégorie -->
+    <TextView
+        android:id="@+id/categoryName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="16sp"
+        android:text="Cartes régionales"/>
+
+    <!-- Bouton supprimer -->
+    <ImageButton
+        android:id="@+id/btnDeleteCategory"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?android:selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_menu_delete"
+        android:contentDescription="Supprimer la catégorie"/>
+
+</LinearLayout>

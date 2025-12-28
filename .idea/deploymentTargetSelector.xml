@@ -2,7 +2,7 @@
 <project version="4">
   <component name="deploymentTargetSelector">
     <selectionStates>
-      <SelectionState runConfigName="Catamap">
+      <SelectionState runConfigName="CataMap">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
     </selectionStates>

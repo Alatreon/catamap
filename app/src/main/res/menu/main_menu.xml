@@ -10,9 +10,9 @@
         android:checkable="true"
         android:checked="true" />
     <item
-         android:id="@+id/action_battery_saver"
-         android:title="@string/conomie_de_batterie"
-         android:checkable="true" />
+        android:id="@+id/action_battery_saver"
+        android:title="@string/conomie_de_batterie"
+        android:checkable="true" />
     <item
         android:id="@+id/action_manual_rotate"
         android:title="@string/rotation_manuelle"
@@ -22,4 +22,7 @@
         android:id="@+id/action_reset_rotation"
         android:title="@string/orienter_vers_le_nord"
         android:checkable="false" />
+    <item
+        android:id="@+id/action_manage_maps"
+        android:title="Gérer les cartes"/>
 </menu>

@@ -12,6 +12,7 @@
         android:theme="@style/Theme.CataMap">
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -20,8 +21,9 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".MapSelectorActivity"
-            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar"/>
+            android:name=".MapManagerActivity"
+            android:theme="@style/Theme.CataMap"
+            android:exported="false"/>
     </application>
 
 </manifest>
