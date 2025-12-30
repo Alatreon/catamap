@@ -2,6 +2,8 @@ package com.brewdog.catamap
 
 import android.content.Context
 import android.net.Uri
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonDeserializationContext
@@ -55,8 +57,8 @@ class MapStorage(private val context: Context) {
 
         // Créer la carte d'exemple avec les images embarquées
         val exampleMap = MapItem(
-            id = "example_map_fdp_2019",
-            name = "Carte d'exemple FDP 2019",
+            id = "example_map_2025",
+            name = "EX_MAP",
             categoryId = Category.UNCATEGORIZED_ID,
             lightImageUri = null, // Les images drawable n'ont pas d'URI
             darkImageUri = null,
@@ -79,7 +81,9 @@ class MapStorage(private val context: Context) {
     fun save(database: MapDatabase): Boolean {
         return try {
             val json = gson.toJson(database)
-            prefs.edit().putString(KEY_DATABASE, json).apply()
+            prefs.edit {
+                putString(KEY_DATABASE, json)
+            }
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -91,7 +95,9 @@ class MapStorage(private val context: Context) {
      * Efface toutes les données (pour debug/reset)
      */
     fun clear() {
-        prefs.edit().clear().apply()
+        prefs.edit {
+            clear()
+        }
     }
 
     /**
@@ -117,7 +123,7 @@ class MapStorage(private val context: Context) {
             context: JsonDeserializationContext?
         ): Uri? {
             val uriString = json?.asString
-            return if (uriString.isNullOrEmpty()) null else Uri.parse(uriString)
+            return if (uriString.isNullOrEmpty()) null else uriString.toUri()
         }
     }
 }

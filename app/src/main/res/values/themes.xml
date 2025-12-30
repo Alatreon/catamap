@@ -1,9 +1,50 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.CataMap" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Thème principal en mode sombre -->
+    <style name="Theme.CataMap" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Couleurs primaires : Gris foncé -->
+        <item name="colorPrimary">#2C2C2C</item>
+        <item name="colorPrimaryVariant">#1A1A1A</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+
+        <!-- Couleurs secondaires/accent : Gris bleuté -->
+        <item name="colorSecondary">#78909C</item>
+        <item name="colorSecondaryVariant">#546E7A</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+
+        <!-- Couleurs des surfaces : Fond sombre -->
+        <item name="colorSurface">#1E1E1E</item>
+        <item name="colorOnSurface">#E0E0E0</item>
+
+        <!-- Fond général -->
+        <item name="android:colorBackground">#121212</item>
+        <item name="colorOnBackground">#E0E0E0</item>
+
+        <!-- Statut bar et navigation bar -->
+        <item name="android:statusBarColor">#1A1A1A</item>
+        <item name="android:navigationBarColor">#1A1A1A</item>
+
+        <!-- Style des fenêtres -->
+        <item name="android:windowBackground">#121212</item>
+
+        <!-- Textes -->
+        <item name="android:textColorPrimary">#E0E0E0</item>
+        <item name="android:textColorSecondary">#B0B0B0</item>
+
+        <!-- Boutons -->
+        <item name="materialButtonStyle">@style/Widget.CataMap.Button</item>
+
+        <!-- Dividers -->
+        <item name="android:listDivider">@color/divider_dark</item>
     </style>
 
-    <style name="Theme.CataMap" parent="Base.Theme.CataMap" />
+    <!-- Style des boutons en mode sombre -->
+    <style name="Widget.CataMap.Button" parent="Widget.MaterialComponents.Button">
+        <item name="backgroundTint">#546E7A</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="rippleColor">#78909C</item>
+    </style>
+
+    <!-- Couleur du divider -->
+    <color name="divider_dark">#2C2C2C</color>
 </resources>

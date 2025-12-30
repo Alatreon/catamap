@@ -154,32 +154,42 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end"
+            android:orientation="vertical"
             android:layout_marginTop="8dp">
 
+            <!-- Ligne 1 : Supprimer -->
             <Button
                 android:id="@+id/btnDelete"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Supprimer"
                 android:textColor="@android:color/holo_red_dark"
                 style="?android:attr/borderlessButtonStyle"
-                android:layout_marginEnd="8dp"/>
+                android:layout_marginBottom="8dp"/>
 
-            <Button
-                android:id="@+id/btnCancel"
-                android:layout_width="wrap_content"
+            <!-- Ligne 2 : Annuler + Enregistrer -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Annuler"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_marginEnd="8dp"/>
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnSave"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Enregistrer"/>
+                <Button
+                    android:id="@+id/btnCancel"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Annuler"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_marginEnd="8dp"/>
+
+                <Button
+                    android:id="@+id/btnSave"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Enregistrer"/>
+
+            </LinearLayout>
 
         </LinearLayout>
 

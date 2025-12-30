@@ -147,8 +147,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             if (map.isBuiltIn) {
                 // Carte embarquée : charger les deux images
-                mapViewLight.setImage(ImageSource.resource(R.drawable.fdp_2019_light))
-                mapViewDark.setImage(ImageSource.resource(R.drawable.fdp_2019_dark))
+                mapViewLight.setImage(ImageSource.resource(R.drawable.exemple_2025_light))
+                mapViewDark.setImage(ImageSource.resource(R.drawable.exemple_2025_dark))
 
                 setupMapListenerForNewMap(mapViewLight)
                 setupMapListenerForNewMap(mapViewDark)

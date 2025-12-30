@@ -5,9 +5,7 @@ plugins {
 
 android {
     namespace = "com.brewdog.catamap"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36  // ✅ Corrigé ici
 
     defaultConfig {
         applicationId = "com.brewdog.catamap"
@@ -46,6 +44,10 @@ dependencies {
     implementation(libs.subsampling)
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("com.google.android.material:material:1.11.0")
+
+    // KTX extensions (si pas déjà dans libs)
+    implementation("androidx.core:core-ktx:1.12.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
