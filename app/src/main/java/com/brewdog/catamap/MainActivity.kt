@@ -66,6 +66,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         compassView = findViewById(R.id.compassView)
         mapViewLight = findViewById(R.id.mapViewLight)
         mapViewDark = findViewById(R.id.mapViewDark)
+        // Gérer les insets système (status bar, notch, etc.)
+        setupWindowInsets()
 
         setupMapView(mapViewLight)
         setupMapView(mapViewDark)
@@ -104,6 +106,38 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         setupRotationTouch(mapViewDark)
         setupRotationTouch(mapViewLight)
     }
+
+    /**
+     * Configure les marges dynamiques pour la status bar et les notchs
+     */
+    private fun setupWindowInsets() {
+        val rootContainer = findViewById<FrameLayout>(R.id.rootContainer)
+        val menuButton = findViewById<ImageButton>(R.id.menuButton)
+
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { _, insets ->
+            val systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            val statusBarHeight = systemBars.top
+
+            // Convertir 8dp en pixels
+            val marginDp = -8
+            val marginPx = (marginDp * resources.displayMetrics.density).toInt()
+
+            // Appliquer les marges au bouton menu
+            (menuButton.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = statusBarHeight + marginPx
+            }
+            menuButton.requestLayout()
+
+            // Appliquer les marges à la boussole
+            (compassView.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = statusBarHeight + marginPx
+            }
+            compassView.requestLayout()
+
+            insets
+        }
+    }
+
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
