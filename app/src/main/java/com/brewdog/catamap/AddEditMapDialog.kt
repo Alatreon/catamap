@@ -4,7 +4,6 @@ import android.app.Dialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -104,8 +103,10 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val view = LayoutInflater.from(requireContext())
-            .inflate(R.layout.dialog_add_edit_map, null)
+        val view = layoutInflater.inflate(
+            R.layout.dialog_add_edit_map,
+            null
+        )
 
         // Récupérer les vues
         editMapName = view.findViewById(R.id.editMapName)
@@ -143,7 +144,8 @@ class AddEditMapDialog : DialogFragment() {
         btnSave.setOnClickListener { saveMap() }
         btnDelete.setOnClickListener { deleteMap() }
 
-        return AlertDialog.Builder(requireContext())
+        // Créer le dialogue avec le thème sombre
+        return AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle(if (mode == Mode.ADD) "Ajouter une carte" else "Modifier la carte")
             .setView(view)
             .create()
@@ -285,7 +287,7 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     private fun deleteMap() {
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Supprimer la carte")
             .setMessage("Êtes-vous sûr de vouloir supprimer cette carte ? Cette action est irréversible.")
             .setPositiveButton("Supprimer") { _, _ ->

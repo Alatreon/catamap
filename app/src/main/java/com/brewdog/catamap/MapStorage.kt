@@ -17,7 +17,7 @@ import java.lang.reflect.Type
 /**
  * Gestion du stockage persistant des cartes et catégories
  */
-class MapStorage(private val context: Context) {
+class MapStorage(context: Context) {
 
     private val prefs = context.getSharedPreferences("map_database", Context.MODE_PRIVATE)
     private val gson: Gson = GsonBuilder()
@@ -88,15 +88,6 @@ class MapStorage(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
             false
-        }
-    }
-
-    /**
-     * Efface toutes les données (pour debug/reset)
-     */
-    fun clear() {
-        prefs.edit {
-            clear()
         }
     }
 

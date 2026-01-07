@@ -33,7 +33,6 @@
             android:layout_height="wrap_content"
             android:text="Catégorie"
             android:textSize="12sp"
-            android:textColor="?android:textColorSecondary"
             android:layout_marginBottom="8dp"/>
 
         <Spinner
@@ -49,7 +48,6 @@
             android:layout_height="wrap_content"
             android:text="Date d'ajout"
             android:textSize="12sp"
-            android:textColor="?android:textColorSecondary"
             android:layout_marginBottom="4dp"/>
 
         <TextView
@@ -67,7 +65,6 @@
             android:text="IMAGES DE LA CARTE"
             android:textSize="12sp"
             android:textStyle="bold"
-            android:textColor="?android:textColorSecondary"
             android:layout_marginBottom="12dp"/>
 
         <!-- Onglets Light / Dark -->
@@ -77,7 +74,10 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             app:tabMode="fixed"
-            app:tabGravity="fill"/>
+            app:tabGravity="fill"
+            app:tabTextColor="#B0B0B0"
+            app:tabSelectedTextColor="#FFFFFF"
+            app:tabIndicatorColor="?attr/colorSecondary"/>
 
         <!-- Contenu des onglets -->
         <FrameLayout
@@ -107,7 +107,6 @@
                     android:layout_height="wrap_content"
                     android:text="Aucune image"
                     android:textSize="12sp"
-                    android:textColor="?android:textColorSecondary"
                     android:ellipsize="middle"
                     android:maxLines="1"/>
 
@@ -134,7 +133,6 @@
                     android:layout_height="wrap_content"
                     android:text="Aucune image"
                     android:textSize="12sp"
-                    android:textColor="?android:textColorSecondary"
                     android:ellipsize="middle"
                     android:maxLines="1"/>
 
@@ -163,7 +161,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Supprimer"
-                android:textColor="@android:color/holo_red_dark"
+                android:textColor="@android:color/holo_red_light"
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_marginBottom="8dp"/>
 

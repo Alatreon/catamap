@@ -27,7 +27,7 @@ class RotationGestureDetector(val listener: (Float) -> Unit) {
                     if (delta > 180) delta -= 360
                     if (delta < -180) delta += 360
 
-                    // Filtrer les mouvements trop brusques (probablement du bruit)
+                    // Filtrer les mouvements trop brusques
                     if (kotlin.math.abs(delta) < 30f) {
                         // Ajouter au buffer de lissage
                         rotationSmoothingBuffer.add(delta)
