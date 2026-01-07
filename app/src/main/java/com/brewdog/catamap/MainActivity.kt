@@ -49,6 +49,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var isLoadingMap = false
     private val adjustedMaps = mutableSetOf<SubsamplingScaleImageView>()
     private lateinit var containerFrame: FrameLayout
+    private val pendingRunnables = mutableListOf<Runnable>()
+    private val loadMapLock = Any()
+    private var stateChangeListener: SubsamplingScaleImageView.OnStateChangedListener? = null
+    private var currentImageEventListener: SubsamplingScaleImageView.OnImageEventListener? = null
 
     companion object {
         const val EXTRA_SELECTED_MAP_ID = "selected_map_id"
@@ -66,6 +70,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         compassView = findViewById(R.id.compassView)
         mapViewLight = findViewById(R.id.mapViewLight)
         mapViewDark = findViewById(R.id.mapViewDark)
+
         // Gérer les insets système (status bar, notch, etc.)
         setupWindowInsets()
 
@@ -85,14 +90,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         loadCurrentMap()
 
-        mapView.setOnStateChangedListener(object : SubsamplingScaleImageView.OnStateChangedListener {
+        stateChangeListener = object : SubsamplingScaleImageView.OnStateChangedListener {
             override fun onCenterChanged(newCenter: PointF?, origin: Int) {
                 isUserInteracting = true
             }
             override fun onScaleChanged(newScale: Float, origin: Int) {
                 isUserInteracting = true
             }
-        })
+        }
+        mapView.setOnStateChangedListener(stateChangeListener)
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         setupMenuButton()
@@ -138,18 +144,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
 
         val selectedMapId = intent.getStringExtra(EXTRA_SELECTED_MAP_ID)
         if (selectedMapId != null) {
-            database = storage.load()
-            val newMap = database.maps.find { it.id == selectedMapId }
-            if (newMap != null && newMap.id != currentMap?.id) {
-                currentMap = newMap
-                loadCurrentMap()
+            synchronized(loadMapLock) {
+                database = storage.load()
+                val newMap = database.maps.find { it.id == selectedMapId }
+                if (newMap != null && newMap.id != currentMap?.id) {
+                    currentMap = newMap
+                    loadCurrentMap()
+                }
             }
         }
     }
@@ -168,11 +175,55 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        cleanupPendingRunnables()
+
+        if (::mapView.isInitialized) {
+            mapView.setOnStateChangedListener(null)
+            mapView.setOnImageEventListener(null)
+        }
+        if (::mapViewLight.isInitialized) {
+            mapViewLight.setOnImageEventListener(null)
+            mapViewLight.recycle()
+        }
+        if (::mapViewDark.isInitialized) {
+            mapViewDark.setOnImageEventListener(null)
+            mapViewDark.recycle()
+        }
+
+        // Nettoyer les capteurs
+        sensorManager.unregisterListener(this)
+    }
+
+    private fun cleanupPendingRunnables() {
+        pendingRunnables.forEach { runnable ->
+            containerFrame.removeCallbacks(runnable)
+            mapViewLight.removeCallbacks(runnable)
+            mapViewDark.removeCallbacks(runnable)
+        }
+        pendingRunnables.clear()
+    }
+
+    private fun View.postDelaySafe(delayMillis: Long, action: () -> Unit) {
+        val runnable = object : Runnable {
+            override fun run() {
+                // Vérifier que l'activité n'est pas détruite
+                if (!isDestroyed && !isFinishing) {
+                    action()
+                }
+                // Auto-nettoyage après exécution
+                pendingRunnables.remove(this)
+            }
+        }
+        pendingRunnables.add(runnable)
+        postDelayed(runnable, delayMillis)
     }
 
     private fun loadCurrentMap() {
-        if (isLoadingMap) return
-        isLoadingMap = true
+        synchronized(loadMapLock) {
+            if (isLoadingMap) return
+            isLoadingMap = true
+        }
 
         currentMap?.let { map ->
             adjustedMaps.clear()
@@ -238,7 +289,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             resetMapRotation()
         }
 
-        mapView.postDelayed({ isLoadingMap = false }, 300)
+        mapView.postDelaySafe(300) {
+            synchronized(loadMapLock) {
+                isLoadingMap = false
+            }
+        }
     }
 
     private fun resetViewTransformations(view: SubsamplingScaleImageView) {
@@ -253,9 +308,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun setupMapListenerForNewMap(map: SubsamplingScaleImageView) {
-        map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
+        map.setOnImageEventListener(null)
+
+        val listener = object : SubsamplingScaleImageView.OnImageEventListener {
             override fun onReady() {
-                map.post {
+                map.postDelaySafe(0) {
                     adjustMapForRotation(map)
                     map.resetScaleAndCenter()
                 }
@@ -265,23 +322,27 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onTileLoadError(e: Exception?) {}
             override fun onPreviewReleased() {}
             override fun onImageLoadError(e: Exception?) {}
-        })
+        }
+        map.setOnImageEventListener(listener)
+        currentImageEventListener = listener
     }
 
     private fun setupMapListenerForModeSwitch(map: SubsamplingScaleImageView, oldScale: Float, oldCenter: PointF?, oldRotation: Float) {
-        map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
+        map.setOnImageEventListener(null)
+
+        val listener = object : SubsamplingScaleImageView.OnImageEventListener {
             override fun onReady() {
-                map.post {
+                map.postDelaySafe(0) {
                     if (map !in adjustedMaps) {
                         adjustMapForRotation(map)
                     }
 
-                    map.postDelayed({
+                    map.postDelaySafe(50) {
                         if (oldCenter != null) {
                             map.setScaleAndCenter(oldScale, oldCenter)
                             map.rotation = oldRotation
                         }
-                    }, 50)
+                    }
                 }
             }
             override fun onImageLoaded() {}
@@ -289,12 +350,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             override fun onTileLoadError(e: Exception?) {}
             override fun onPreviewReleased() {}
             override fun onImageLoadError(e: Exception?) {}
-        })
+        }
+        map.setOnImageEventListener(listener)
+        currentImageEventListener = listener
     }
 
     private fun adjustMapForRotation(map: SubsamplingScaleImageView) {
         if (map.width == 0 || map.height == 0) {
-            map.postDelayed({ adjustMapForRotation(map) }, 50)
+            map.postDelaySafe(50) {
+                adjustMapForRotation(map)
+            }
             return
         }
 
@@ -319,7 +384,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.translationX = -paddingNeeded.toFloat()
         map.translationY = -paddingNeeded.toFloat()
 
-        map.post {
+        map.postDelaySafe(0) {
             map.pivotX = (imageWidth + paddingNeeded * 2) / 2f
             map.pivotY = (imageHeight + paddingNeeded * 2) / 2f
         }
@@ -351,7 +416,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun setMapDarkMode(enabled: Boolean) {
         if (enabled == darkModeEnabled || isLoadingMap) return
-        isLoadingMap = true
+
+        synchronized(loadMapLock) {
+            if (isLoadingMap) return
+            isLoadingMap = true
+        }
+
         darkModeEnabled = enabled
 
         val oldScale = mapView.scale
@@ -372,7 +442,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mapView = newMapView
 
             if (newMapView.isReady && newMapView in adjustedMaps) {
-                newMapView.post {
+                newMapView.postDelaySafe(0) {
                     val padding = if (newMapView.width > 0 && newMapView.height > 0) {
                         val screenWidth = containerFrame.width
                         val screenHeight = containerFrame.height
@@ -389,26 +459,34 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         newMapView.pivotY = (newMapView.height + padding * 2) / 2f
                     }
 
-                    newMapView.postDelayed({
+                    newMapView.postDelaySafe(50) {
                         if (oldCenter != null) {
                             newMapView.setScaleAndCenter(oldScale, oldCenter)
                             newMapView.rotation = oldRotation
                         }
-                        isLoadingMap = false
-                    }, 50)
+                        synchronized(loadMapLock) {
+                            isLoadingMap = false
+                        }
+                    }
                 }
             } else {
                 setupMapListenerForModeSwitch(newMapView, oldScale, oldCenter, oldRotation)
-                isLoadingMap = false
+                synchronized(loadMapLock) {
+                    isLoadingMap = false
+                }
             }
         } else {
-            isLoadingMap = false
+            synchronized(loadMapLock) {
+                isLoadingMap = false
+            }
         }
     }
 
     override fun onPause() {
         super.onPause()
         sensorManager.unregisterListener(this)
+
+        cleanupPendingRunnables()
     }
 
     override fun onSensorChanged(event: SensorEvent) {
@@ -581,7 +659,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         mapView.rotation += diff * 0.9f
 
         if (isUserInteracting) {
-            mapView.postDelayed({ isUserInteracting = false }, 50)
+            mapView.postDelaySafe(50) {
+                isUserInteracting = false
+            }
         }
     }
 
