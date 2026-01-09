@@ -263,6 +263,58 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    // 🎯 Calculer le minScale optimal pour voir toute la carte au dézoom maximum
+    private fun calculateMinScaleWithPadding(map: SubsamplingScaleImageView): Float {
+        android.util.Log.d("MainActivity", "🔧 calculateMinScaleWithPadding appelée")
+
+        val screenWidth = containerFrame.width
+        val screenHeight = containerFrame.height
+        val screenDiagonal = kotlin.math.hypot(screenWidth.toFloat(), screenHeight.toFloat())
+
+        // ✅ Utiliser les dimensions de l'IMAGE SOURCE, pas de la vue !
+        val sourceImageWidth = map.sWidth.toFloat()
+        val sourceImageHeight = map.sHeight.toFloat()
+
+        android.util.Log.d("MainActivity", "  Écran: ${screenWidth}×${screenHeight}, Image: ${sourceImageWidth}×${sourceImageHeight}")
+
+        // Le padding est ajouté en fonction de la PLUS PETITE dimension de l'écran
+        // pour permettre la rotation sans bordures
+        val minScreenDimension = minOf(screenWidth, screenHeight).toFloat()
+
+        // Calculer le padding nécessaire pour la rotation (formule de adjustMapForRotation)
+        // Mais on doit estimer basé sur l'écran, pas sur la vue qui n'existe pas encore
+        val paddingNeeded = ((screenDiagonal - minScreenDimension) / 2f * 1.1f).toInt()
+
+        android.util.Log.d("MainActivity", "  Diagonal: $screenDiagonal, Padding estimé: $paddingNeeded")
+
+        // La vue finale sera agrandie avec ce padding
+        // viewWidth = screenWidth + padding * 2 (approximation)
+        val estimatedViewWidth = screenWidth + paddingNeeded * 2
+
+        // Ratio : quelle proportion de la vue agrandie est l'écran visible ?
+        val paddingRatio = screenWidth.toFloat() / estimatedViewWidth.toFloat()
+
+        // Scale de base pour afficher l'image dans l'écran
+        val baseMinScaleWidth = screenWidth.toFloat() / sourceImageWidth
+        val baseMinScaleHeight = screenHeight.toFloat() / sourceImageHeight
+        val baseMinScale = minOf(baseMinScaleWidth, baseMinScaleHeight)
+
+        // ✅ Facteur d'ajustement : 1.3 = un peu plus zoomé (moins de dézoom)
+        // Valeurs possibles :
+        // 1.0 = dézoom maximum (carte très petite)
+        // 1.3 = équilibre (recommandé)
+        // 1.5 = moins de dézoom (carte plus grande)
+        // 2.0 = beaucoup moins de dézoom
+        val adjustmentFactor = 2.5f
+
+        // Scale corrigé avec le padding ET l'ajustement
+        val correctedMinScale = baseMinScale * paddingRatio * adjustmentFactor
+
+        android.util.Log.d("MainActivity", "📐 minScale calculé: $correctedMinScale (base=$baseMinScale, ratio=$paddingRatio, ajustement=$adjustmentFactor, padding=$paddingNeeded)")
+
+        return correctedMinScale
+    }
+
     private fun resetMapRotation() {
         mapView.rotation = 0f
         compassView.rotation = 0f
@@ -336,9 +388,26 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
             override fun onReady() {
                 map.post {
+                    // Calculer le minScale AVANT adjustMapForRotation
+                    val calculatedMinScale = calculateMinScaleWithPadding(map)
+                    map.minScale = calculatedMinScale
+                    map.maxScale = 2.0f
+
+                    android.util.Log.d("MainActivity", "✅ minScale appliqué: $calculatedMinScale")
+
+                    // Ensuite ajuster pour la rotation
                     if (map.isVisible && !isMapAdjusted) {
                         adjustMapForRotation(map)
-                        map.resetScaleAndCenter()
+
+                        // ✅ Centrer la carte au minScale avec un délai
+                        map.postDelayed({
+                            val center = android.graphics.PointF(
+                                map.sWidth / 2f,
+                                map.sHeight / 2f
+                            )
+                            map.setScaleAndCenter(calculatedMinScale, center)
+                            android.util.Log.d("MainActivity", "✅ Carte centrée à $center avec scale $calculatedMinScale")
+                        }, 50)  // Petit délai pour s'assurer que l'ajustement est terminé
                     }
                 }
             }
@@ -404,6 +473,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.setMaxTileSize(4096)
         map.setMinimumTileDpi(320)
         map.setExecutor(Executors.newFixedThreadPool(4))
+
+        // ✅ CRITIQUE : Dire à la bibliothèque d'utiliser NOTRE minScale personnalisé
+        // Sans ça, la bibliothèque recalcule automatiquement le minScale !
+        map.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CUSTOM)
     }
 
     // 🔄 Afficher le loader INSTANTANÉMENT (sans animation)
@@ -494,6 +567,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mapView.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
                 override fun onReady() {
                     mapView.post {
+                        // Calculer le minScale AVANT adjustMapForRotation
+                        val calculatedMinScale = calculateMinScaleWithPadding(mapView)
+                        mapView.minScale = calculatedMinScale
+                        mapView.maxScale = 2.0f
+
                         // Réajuster pour la rotation si nécessaire
                         if (!isMapAdjusted) {
                             adjustMapForRotation(mapView)
