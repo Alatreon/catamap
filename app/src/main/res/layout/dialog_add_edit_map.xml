@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="24dp">
+    android:padding="24dp"
+    android:background="?android:attr/colorBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -33,6 +33,7 @@
             android:layout_height="wrap_content"
             android:text="Catégorie"
             android:textSize="12sp"
+            android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="8dp"/>
 
         <Spinner
@@ -43,102 +44,60 @@
 
         <!-- Date d'ajout (lecture seule) -->
         <TextView
-            android:id="@+id/labelDateAdded"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Date d'ajout"
             android:textSize="12sp"
+            android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="4dp"/>
 
         <TextView
             android:id="@+id/textDateAdded"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="26 décembre 2025"
+            android:text="07/01/2026"
             android:textSize="16sp"
-            android:layout_marginBottom="16dp"/>
+            android:textColor="?android:attr/textColorPrimary"
+            android:layout_marginBottom="24dp"/>
 
-        <!-- Section Images -->
+        <!-- Sélection d'image -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="IMAGES DE LA CARTE"
+            android:text="IMAGE"
             android:textSize="12sp"
             android:textStyle="bold"
+            android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="12dp"/>
 
-        <!-- Onglets Light / Dark -->
-        <com.google.android.material.tabs.TabLayout
-            android:id="@+id/tabLayout"
+        <Button
+            android:id="@+id/btnSelectImage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:text="📷 Sélectionner une image"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Statut du traitement -->
+        <TextView
+            android:id="@+id/textImageStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Aucune image sélectionnée"
+            android:textSize="14sp"
+            android:textColor="?android:attr/textColorSecondary"
+            android:gravity="center"
+            android:minHeight="40dp"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Progress Bar -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
             android:layout_marginBottom="16dp"
-            app:tabMode="fixed"
-            app:tabGravity="fill"
-            app:tabTextColor="#B0B0B0"
-            app:tabSelectedTextColor="#FFFFFF"
-            app:tabIndicatorColor="?attr/colorSecondary"/>
-
-        <!-- Contenu des onglets -->
-        <FrameLayout
-            android:id="@+id/tabContent"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <!-- Onglet Light -->
-            <LinearLayout
-                android:id="@+id/lightModeContent"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="visible">
-
-                <Button
-                    android:id="@+id/btnSelectLightImage"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Choisir l'image Light"
-                    android:layout_marginBottom="8dp"/>
-
-                <TextView
-                    android:id="@+id/textLightImagePath"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Aucune image"
-                    android:textSize="12sp"
-                    android:ellipsize="middle"
-                    android:maxLines="1"/>
-
-            </LinearLayout>
-
-            <!-- Onglet Dark -->
-            <LinearLayout
-                android:id="@+id/darkModeContent"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:visibility="gone">
-
-                <Button
-                    android:id="@+id/btnSelectDarkImage"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Choisir l'image Dark"
-                    android:layout_marginBottom="8dp"/>
-
-                <TextView
-                    android:id="@+id/textDarkImagePath"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Aucune image"
-                    android:textSize="12sp"
-                    android:ellipsize="middle"
-                    android:maxLines="1"/>
-
-            </LinearLayout>
-
-        </FrameLayout>
+            android:visibility="gone"/>
 
         <!-- Carte par défaut -->
         <CheckBox
@@ -146,16 +105,16 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Définir comme carte par défaut"
-            android:layout_marginBottom="16dp"/>
+            android:textColor="?android:attr/textColorPrimary"
+            android:layout_marginBottom="24dp"/>
 
         <!-- Boutons d'action -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_marginTop="8dp">
+            android:orientation="vertical">
 
-            <!-- Ligne 1 : Supprimer -->
+            <!-- Bouton Supprimer -->
             <Button
                 android:id="@+id/btnDelete"
                 android:layout_width="match_parent"
@@ -165,7 +124,7 @@
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_marginBottom="8dp"/>
 
-            <!-- Ligne 2 : Annuler + Enregistrer -->
+            <!-- Ligne Annuler + Enregistrer -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

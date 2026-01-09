@@ -5,26 +5,15 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.LinearLayout
-import android.widget.Spinner
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
-import com.google.android.material.tabs.TabLayout
 import com.google.android.material.textfield.TextInputEditText
+import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
+import java.util.*
 
-/**
- * Modale d'ajout ou modification d'une carte avec onglets Light/Dark
- */
 class AddEditMapDialog : DialogFragment() {
 
     enum class Mode { ADD, EDIT }
@@ -33,64 +22,36 @@ class AddEditMapDialog : DialogFragment() {
     private var existingMap: MapItem? = null
     private var onSaveListener: ((MapItem) -> Unit)? = null
     private var onDeleteListener: (() -> Unit)? = null
-
     private var selectedLightUri: Uri? = null
     private var selectedDarkUri: Uri? = null
+    private var processingJob: Job? = null
 
-    // Vues
     private lateinit var editMapName: TextInputEditText
     private lateinit var spinnerCategory: Spinner
     private lateinit var textDateAdded: TextView
-    private lateinit var tabLayout: TabLayout
-    private lateinit var lightModeContent: LinearLayout
-    private lateinit var darkModeContent: LinearLayout
-    private lateinit var textLightImagePath: TextView
-    private lateinit var textDarkImagePath: TextView
-    private lateinit var btnSelectLightImage: Button
-    private lateinit var btnSelectDarkImage: Button
+    private lateinit var btnSelectImage: Button
+    private lateinit var textImageStatus: TextView
+    private lateinit var progressBar: ProgressBar
     private lateinit var checkDefaultMap: CheckBox
     private lateinit var btnDelete: Button
     private lateinit var btnCancel: Button
     private lateinit var btnSave: Button
 
-    // Lanceurs pour sélection d'images
-    private val selectLightImageLauncher = registerForActivityResult(
+    private val selectImageLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let {
             requireContext().contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                it, Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-            selectedLightUri = it
-            textLightImagePath.text = it.lastPathSegment ?: it.toString()
-        }
-    }
-
-    private val selectDarkImageLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let {
-            requireContext().contentResolver.takePersistableUriPermission(
-                it,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            selectedDarkUri = it
-            textDarkImagePath.text = it.lastPathSegment ?: it.toString()
+            processImage(it)
         }
     }
 
     companion object {
-        private const val ARG_MODE = "mode"
-
-        fun newInstance(mode: Mode, existingMap: MapItem? = null): AddEditMapDialog {
-            return AddEditMapDialog().apply {
-                arguments = Bundle().apply {
-                    putString(ARG_MODE, mode.name)
-                }
-                this.mode = mode
-                this.existingMap = existingMap
-            }
+        fun newInstance(mode: Mode, existingMap: MapItem? = null) = AddEditMapDialog().apply {
+            this.mode = mode
+            this.existingMap = existingMap
         }
     }
 
@@ -103,198 +64,154 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val view = layoutInflater.inflate(
-            R.layout.dialog_add_edit_map,
-            null
-        )
+        val view = layoutInflater.inflate(R.layout.dialog_add_edit_map, null)
+        initializeViews(view)
+        setupListeners()
+        populateFields()
+        return AlertDialog.Builder(requireContext()).setView(view).create()
+    }
 
-        // Récupérer les vues
+    private fun initializeViews(view: View) {
         editMapName = view.findViewById(R.id.editMapName)
         spinnerCategory = view.findViewById(R.id.spinnerCategory)
         textDateAdded = view.findViewById(R.id.textDateAdded)
-        tabLayout = view.findViewById(R.id.tabLayout)
-        lightModeContent = view.findViewById(R.id.lightModeContent)
-        darkModeContent = view.findViewById(R.id.darkModeContent)
-        textLightImagePath = view.findViewById(R.id.textLightImagePath)
-        textDarkImagePath = view.findViewById(R.id.textDarkImagePath)
-        btnSelectLightImage = view.findViewById(R.id.btnSelectLightImage)
-        btnSelectDarkImage = view.findViewById(R.id.btnSelectDarkImage)
+        btnSelectImage = view.findViewById(R.id.btnSelectImage)
+        textImageStatus = view.findViewById(R.id.textImageStatus)
+        progressBar = view.findViewById(R.id.progressBar)
         checkDefaultMap = view.findViewById(R.id.checkDefaultMap)
         btnDelete = view.findViewById(R.id.btnDelete)
         btnCancel = view.findViewById(R.id.btnCancel)
         btnSave = view.findViewById(R.id.btnSave)
 
-        // Setup des onglets
-        setupTabs()
+        if (mode == Mode.ADD) btnDelete.visibility = View.GONE
+    }
 
-        // Charger les catégories
-        setupCategorySpinner()
-
-        // Mode ajout ou édition
-        if (mode == Mode.EDIT && existingMap != null) {
-            setupEditMode()
-        } else {
-            setupAddMode()
-        }
-
-        // Listeners
-        btnSelectLightImage.setOnClickListener { selectLightImageLauncher.launch(arrayOf("image/*")) }
-        btnSelectDarkImage.setOnClickListener { selectDarkImageLauncher.launch(arrayOf("image/*")) }
+    private fun setupListeners() {
+        btnSelectImage.setOnClickListener { selectImageLauncher.launch(arrayOf("image/*")) }
         btnCancel.setOnClickListener { dismiss() }
         btnSave.setOnClickListener { saveMap() }
-        btnDelete.setOnClickListener { deleteMap() }
-
-        // Créer le dialogue avec le thème sombre
-        return AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
-            .setTitle(if (mode == Mode.ADD) "Ajouter une carte" else "Modifier la carte")
-            .setView(view)
-            .create()
+        btnDelete.setOnClickListener { confirmDelete() }
     }
 
-    private fun setupTabs() {
-        tabLayout.addTab(tabLayout.newTab().setText("Light"))
-        tabLayout.addTab(tabLayout.newTab().setText("Dark"))
+    private fun processImage(uri: Uri) {
+        processingJob?.cancel()
+        processingJob = CoroutineScope(Dispatchers.Main).launch {
+            try {
+                textImageStatus.text = "🔍 Analyse..."
+                progressBar.visibility = View.VISIBLE
+                btnSelectImage.isEnabled = false
 
-        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {
-                when (tab.position) {
-                    0 -> {
-                        lightModeContent.visibility = View.VISIBLE
-                        darkModeContent.visibility = View.GONE
-                    }
-                    1 -> {
-                        lightModeContent.visibility = View.GONE
-                        darkModeContent.visibility = View.VISIBLE
-                    }
+                val isDark = withContext(Dispatchers.IO) {
+                    MapModeDetector.isImageDarkModeSync(requireContext(), uri)
                 }
-            }
 
-            override fun onTabUnselected(tab: TabLayout.Tab) {}
-            override fun onTabReselected(tab: TabLayout.Tab) {}
-        })
+                textImageStatus.text = "⏳ Génération..."
+
+                val negativeUri = withContext(Dispatchers.IO) {
+                    MapImageConverter.generateAlternateVersionOptimized(
+                        requireContext(), uri, MapImageConverter.ConversionMode.INVERT
+                    )
+                }
+
+                if (negativeUri != null) {
+                    if (isDark) {
+                        selectedDarkUri = uri
+                        selectedLightUri = negativeUri
+                    } else {
+                        selectedLightUri = uri
+                        selectedDarkUri = negativeUri
+                    }
+                    textImageStatus.text = "✅ Les deux versions prêtes !"
+                    Toast.makeText(requireContext(), "✓ Carte prête !", Toast.LENGTH_SHORT).show()
+                } else {
+                    throw Exception("Erreur génération")
+                }
+            } catch (e: Exception) {
+                textImageStatus.text = "❌ ${e.message}"
+                selectedLightUri = uri
+            } finally {
+                progressBar.visibility = View.GONE
+                btnSelectImage.isEnabled = true
+            }
+        }
     }
 
-    private fun setupCategorySpinner() {
+    private fun populateFields() {
         val storage = MapStorage(requireContext())
         val database = storage.load()
-
-        val categories = database.categories.map { it.name }
-        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, categories)
+        val categoryNames = database.categories.map { it.name }
+        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, categoryNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerCategory.adapter = adapter
-    }
 
-    private fun setupAddMode() {
-        // Masquer la date et le bouton supprimer
-        view?.findViewById<TextView>(R.id.labelDateAdded)?.visibility = View.GONE
-        textDateAdded.visibility = View.GONE
-        btnDelete.visibility = View.GONE
-    }
-
-    private fun setupEditMode() {
-        existingMap?.let { map ->
-            editMapName.setText(map.name)
-
-            // Date
-            val dateFormat = SimpleDateFormat("dd MMMM yyyy", Locale.FRENCH)
-            textDateAdded.text = dateFormat.format(Date(map.dateAdded))
-
-            // Catégorie
-            val storage = MapStorage(requireContext())
-            val database = storage.load()
-            val categoryIndex = database.categories.indexOfFirst { it.id == map.categoryId }
-            if (categoryIndex != -1) {
-                spinnerCategory.setSelection(categoryIndex)
+        if (mode == Mode.EDIT && existingMap != null) {
+            existingMap?.let { map ->
+                editMapName.setText(map.name)
+                textDateAdded.text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(map.dateAdded))
+                checkDefaultMap.isChecked = map.isDefault
+                selectedLightUri = map.lightImageUri
+                selectedDarkUri = map.darkImageUri
+                textImageStatus.text = if (map.lightImageUri != null || map.darkImageUri != null) "✓ Image présente" else "Aucune image"
+                val category = database.categories.find { it.id == map.categoryId }
+                spinnerCategory.setSelection(categoryNames.indexOf(category?.name).coerceAtLeast(0))
             }
-
-            // Images
-            selectedLightUri = map.lightImageUri
-            selectedDarkUri = map.darkImageUri
-
-            textLightImagePath.text = if (map.hasLightMode && map.lightImageUri != null) {
-                map.lightImageUri?.lastPathSegment ?: "Image Light"
-            } else {
-                "Aucune image"
-            }
-
-            textDarkImagePath.text = if (map.hasDarkMode && map.darkImageUri != null) {
-                map.darkImageUri?.lastPathSegment ?: "Image Dark"
-            } else {
-                "Aucune image"
-            }
-
-            // Carte par défaut
-            checkDefaultMap.isChecked = map.isDefault
-
-            // Si c'est la carte par défaut, on ne peut pas la supprimer
-            if (map.isDefault) {
-                btnDelete.isEnabled = false
-                btnDelete.alpha = 0.5f
-            }
+        } else {
+            textDateAdded.text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+            textImageStatus.text = "Aucune image sélectionnée"
         }
     }
 
     private fun saveMap() {
         val name = editMapName.text.toString().trim()
-
-        // Validation
         if (name.isEmpty()) {
-            Toast.makeText(requireContext(), "Veuillez entrer un nom", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Entrez un nom", Toast.LENGTH_SHORT).show()
             return
         }
-
-        // Au moins une image doit être sélectionnée
         if (selectedLightUri == null && selectedDarkUri == null) {
-            Toast.makeText(requireContext(), "Veuillez sélectionner au moins une image (Light ou Dark)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Sélectionnez une image", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Récupérer la catégorie sélectionnée
         val storage = MapStorage(requireContext())
         val database = storage.load()
-        val categoryName = spinnerCategory.selectedItem.toString()
-        val category = database.categories.find { it.name == categoryName }
-            ?: database.categories.first { it.isSystem }
-
-        // Créer ou mettre à jour la carte
-        val map = if (mode == Mode.EDIT && existingMap != null) {
-            existingMap!!.copy(
-                name = name,
-                categoryId = category.id,
-                lightImageUri = selectedLightUri,
-                darkImageUri = selectedDarkUri,
-                hasLightMode = selectedLightUri != null,
-                hasDarkMode = selectedDarkUri != null,
-                isDefault = checkDefaultMap.isChecked
-            )
-        } else {
-            MapItem(
-                id = UUID.randomUUID().toString(),
-                name = name,
-                categoryId = category.id,
-                lightImageUri = selectedLightUri,
-                darkImageUri = selectedDarkUri,
-                dateAdded = System.currentTimeMillis(),
-                isDefault = checkDefaultMap.isChecked,
-                hasLightMode = selectedLightUri != null,
-                hasDarkMode = selectedDarkUri != null,
-                isBuiltIn = false
-            )
-        }
-
+        val category = database.categories.find { it.name == spinnerCategory.selectedItem?.toString() }
+        val map = MapItem(
+            id = existingMap?.id ?: UUID.randomUUID().toString(),
+            name = name,
+            categoryId = category?.id ?: Category.UNCATEGORIZED_ID,
+            lightImageUri = selectedLightUri,
+            darkImageUri = selectedDarkUri,
+            dateAdded = existingMap?.dateAdded ?: System.currentTimeMillis(),
+            isDefault = checkDefaultMap.isChecked,
+            hasLightMode = selectedLightUri != null,
+            hasDarkMode = selectedDarkUri != null,
+            isBuiltIn = false
+        )
         onSaveListener?.invoke(map)
         dismiss()
     }
 
-    private fun deleteMap() {
-        AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
-            .setTitle("Supprimer la carte")
-            .setMessage("Êtes-vous sûr de vouloir supprimer cette carte ? Cette action est irréversible.")
-            .setPositiveButton("Supprimer") { _, _ ->
-                onDeleteListener?.invoke()
-                dismiss()
-            }
-            .setNegativeButton("Annuler", null)
+    private fun confirmDelete() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("Supprimer")
+            .setMessage("Supprimer cette carte ?")
+            .setPositiveButton("Oui") { _, _ -> onDeleteListener?.invoke(); dismiss() }
+            .setNegativeButton("Non", null)
             .show()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        processingJob?.cancel()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        processingJob?.cancel()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        processingJob?.cancel()
     }
 }

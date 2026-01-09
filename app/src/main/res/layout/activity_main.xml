@@ -6,24 +6,38 @@
     android:layout_height="match_parent"
     android:fitsSystemWindows="false">
 
-    <!-- Carte sombre -->
+    <!-- ✅ UNE SEULE VUE au lieu de 2 (mapViewDark + mapViewLight) -->
     <com.brewdog.catamap.AccessibleSubsamplingImageView
-        android:id="@+id/mapViewDark"
+        android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/black"
         app:panEnabled="true"
         app:zoomEnabled="true"/>
 
-    <!-- Carte claire -->
-    <com.brewdog.catamap.AccessibleSubsamplingImageView
-        android:id="@+id/mapViewLight"
+    <!-- 🔄 LOADER TRANSPARENT - La carte reste visible ! -->
+    <FrameLayout
+        android:id="@+id/loadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@android:color/white"
         android:visibility="gone"
-        app:panEnabled="true"
-        app:zoomEnabled="true"/>
+        android:clickable="true"
+        android:focusable="true">
+
+        <!-- Spinner en haut à droite (comme la boussole) -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top|start"
+            android:layout_marginTop="88dp"
+            android:layout_marginStart="8dp"
+            android:indeterminate="true"
+            android:indeterminateTint="@android:color/white"
+            android:background="@drawable/loader_background"
+            android:padding="8dp"/>
+
+    </FrameLayout>
 
     <!-- Bouton menu (marge dynamique appliquée via code) -->
     <ImageButton
