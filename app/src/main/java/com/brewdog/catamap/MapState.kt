@@ -29,7 +29,7 @@ class MapState {
             rotation = mapView.rotation
         )
 
-        android.util.Log.d("MapState", "✅ État capturé: scale=${savedState?.scale}, center=${savedState?.center}, rotation=${savedState?.rotation}")
+        android.util.Log.d("MapState", "État capturé: scale=${savedState?.scale}, center=${savedState?.center}, rotation=${savedState?.rotation}")
     }
 
     /**
@@ -39,14 +39,14 @@ class MapState {
         val state = savedState ?: return
 
         if (!mapView.isReady) {
-            android.util.Log.w("MapState", "⚠️ MapView pas prête, impossible d'appliquer l'état")
+            android.util.Log.w("MapState", "MapView pas prête, impossible d'appliquer l'état")
             return
         }
 
         mapView.setScaleAndCenter(state.scale, state.center)
         mapView.rotation = state.rotation
 
-        android.util.Log.d("MapState", "✅ État appliqué: scale=${state.scale}, center=${state.center}, rotation=${state.rotation}")
+        android.util.Log.d("MapState", "État appliqué: scale=${state.scale}, center=${state.center}, rotation=${state.rotation}")
     }
 
     /**
@@ -54,7 +54,7 @@ class MapState {
      */
     fun reset() {
         savedState = null
-        android.util.Log.d("MapState", "🗑️ État réinitialisé")
+        android.util.Log.d("MapState", "État réinitialisé")
     }
 
     /**

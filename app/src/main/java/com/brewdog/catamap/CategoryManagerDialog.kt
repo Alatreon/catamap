@@ -142,7 +142,6 @@ class CategoryManagerDialog : DialogFragment() {
             fun bind(category: Category) {
                 categoryName.text = category.name
 
-                // Désactiver le bouton supprimer pour "Sans catégorie"
                 if (category.isSystem) {
                     btnDelete.isEnabled = false
                     btnDelete.alpha = 0.3f

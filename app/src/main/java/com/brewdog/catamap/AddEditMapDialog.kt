@@ -71,7 +71,6 @@ class AddEditMapDialog : DialogFragment() {
 
         val dialog = AlertDialog.Builder(requireContext()).setView(view).create()
 
-        // ✅ Empêcher la fermeture en cliquant en dehors
         dialog.setCanceledOnTouchOutside(false)
 
         return dialog
@@ -106,7 +105,6 @@ class AddEditMapDialog : DialogFragment() {
                 textImageStatus.text = "🔍 Analyse..."
                 progressBar.visibility = View.VISIBLE
                 btnSelectImage.isEnabled = false
-                // ✅ Désactiver le bouton Enregistrer pendant la conversion
                 btnSave.isEnabled = false
 
                 val isDark = withContext(Dispatchers.IO) {
@@ -129,7 +127,7 @@ class AddEditMapDialog : DialogFragment() {
                         selectedLightUri = uri
                         selectedDarkUri = negativeUri
                     }
-                    textImageStatus.text = "✅ Les deux versions prêtes !"
+                    textImageStatus.text = "Les deux versions prêtes"
                     Toast.makeText(requireContext(), "✓ Carte prête !", Toast.LENGTH_SHORT).show()
                 } else {
                     throw Exception("Erreur génération")
@@ -140,7 +138,6 @@ class AddEditMapDialog : DialogFragment() {
             } finally {
                 progressBar.visibility = View.GONE
                 btnSelectImage.isEnabled = true
-                // ✅ Réactiver le bouton Enregistrer après la conversion
                 btnSave.isEnabled = true
             }
         }

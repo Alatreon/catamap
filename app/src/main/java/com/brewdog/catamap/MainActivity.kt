@@ -28,14 +28,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var azimuthFiltered = 0f
     private lateinit var compassView: ImageView
     private var rotateWithCompass = false
-
-    // ✅ NOUVELLE ARCHITECTURE : Une seule vue au lieu de 2
     private lateinit var mapView: AccessibleSubsamplingImageView
     private val mapState = MapState()
-
-    // 🔄 Loader
     private lateinit var loadingOverlay: FrameLayout
-
     private var isUserInteracting = false
     private var darkModeEnabled = true
     private val rotationMatrix = FloatArray(9)
@@ -47,7 +42,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var batterySaverEnabled = false
     private lateinit var rotationDetector: RotationGestureDetector
     private var manualRotateEnabled = false
-
     private lateinit var storage: MapStorage
     private lateinit var database: MapDatabase
     private var currentMap: MapItem? = null
@@ -70,10 +64,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         containerFrame = findViewById(android.R.id.content)
         compassView = findViewById(R.id.compassView)
 
-        // ✅ Une seule vue maintenant
         mapView = findViewById(R.id.mapView)
 
-        // 🔄 Initialiser le loader
         loadingOverlay = findViewById(R.id.loadingOverlay)
 
         setupWindowInsets()
@@ -199,7 +191,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         popup.menu.findItem(R.id.menu_rotate_manual)?.isChecked = manualRotateEnabled
         popup.menu.findItem(R.id.menu_battery_saver)?.isChecked = batterySaverEnabled
 
-        // ✅ Afficher "Orienter vers le nord" SEULEMENT si rotation manuelle activée
         popup.menu.findItem(R.id.menu_reset_rotation)?.isVisible = manualRotateEnabled
 
         popup.setOnMenuItemClickListener { item ->
@@ -218,7 +209,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     item.isChecked = rotateWithCompass
                     if (rotateWithCompass) {
                         manualRotateEnabled = false
-                        // ✅ Réorienter vers le nord quand on désactive rotation manuelle
+                        resetMapRotation()
+                    } else {
                         resetMapRotation()
                     }
                     updateRotationAndCompass()
@@ -230,7 +222,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     if (manualRotateEnabled) {
                         rotateWithCompass = false
                     } else {
-                        // ✅ Réorienter vers le nord quand on désactive rotation manuelle
                         resetMapRotation()
                     }
                     true
@@ -263,54 +254,37 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    // 🎯 Calculer le minScale optimal pour voir toute la carte au dézoom maximum
     private fun calculateMinScaleWithPadding(map: SubsamplingScaleImageView): Float {
-        android.util.Log.d("MainActivity", "🔧 calculateMinScaleWithPadding appelée")
+        android.util.Log.d("MainActivity", "calculateMinScaleWithPadding appelée")
 
         val screenWidth = containerFrame.width
         val screenHeight = containerFrame.height
         val screenDiagonal = kotlin.math.hypot(screenWidth.toFloat(), screenHeight.toFloat())
 
-        // ✅ Utiliser les dimensions de l'IMAGE SOURCE, pas de la vue !
         val sourceImageWidth = map.sWidth.toFloat()
         val sourceImageHeight = map.sHeight.toFloat()
 
-        android.util.Log.d("MainActivity", "  Écran: ${screenWidth}×${screenHeight}, Image: ${sourceImageWidth}×${sourceImageHeight}")
+        android.util.Log.d("MainActivity", "Écran: ${screenWidth}×${screenHeight}, Image: ${sourceImageWidth}×${sourceImageHeight}")
 
-        // Le padding est ajouté en fonction de la PLUS PETITE dimension de l'écran
-        // pour permettre la rotation sans bordures
         val minScreenDimension = minOf(screenWidth, screenHeight).toFloat()
 
-        // Calculer le padding nécessaire pour la rotation (formule de adjustMapForRotation)
-        // Mais on doit estimer basé sur l'écran, pas sur la vue qui n'existe pas encore
         val paddingNeeded = ((screenDiagonal - minScreenDimension) / 2f * 1.1f).toInt()
 
-        android.util.Log.d("MainActivity", "  Diagonal: $screenDiagonal, Padding estimé: $paddingNeeded")
+        android.util.Log.d("MainActivity", "Diagonal: $screenDiagonal, Padding estimé: $paddingNeeded")
 
-        // La vue finale sera agrandie avec ce padding
-        // viewWidth = screenWidth + padding * 2 (approximation)
         val estimatedViewWidth = screenWidth + paddingNeeded * 2
 
-        // Ratio : quelle proportion de la vue agrandie est l'écran visible ?
         val paddingRatio = screenWidth.toFloat() / estimatedViewWidth.toFloat()
 
-        // Scale de base pour afficher l'image dans l'écran
         val baseMinScaleWidth = screenWidth.toFloat() / sourceImageWidth
         val baseMinScaleHeight = screenHeight.toFloat() / sourceImageHeight
         val baseMinScale = minOf(baseMinScaleWidth, baseMinScaleHeight)
 
-        // ✅ Facteur d'ajustement : 1.3 = un peu plus zoomé (moins de dézoom)
-        // Valeurs possibles :
-        // 1.0 = dézoom maximum (carte très petite)
-        // 1.3 = équilibre (recommandé)
-        // 1.5 = moins de dézoom (carte plus grande)
-        // 2.0 = beaucoup moins de dézoom
         val adjustmentFactor = 2.5f
 
-        // Scale corrigé avec le padding ET l'ajustement
         val correctedMinScale = baseMinScale * paddingRatio * adjustmentFactor
 
-        android.util.Log.d("MainActivity", "📐 minScale calculé: $correctedMinScale (base=$baseMinScale, ratio=$paddingRatio, ajustement=$adjustmentFactor, padding=$paddingNeeded)")
+        android.util.Log.d("MainActivity", "minScale calculé: $correctedMinScale (base=$baseMinScale, ratio=$paddingRatio, ajustement=$adjustmentFactor, padding=$paddingNeeded)")
 
         return correctedMinScale
     }
@@ -324,12 +298,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         if (isLoadingMap) return
         isLoadingMap = true
 
+        showLoader()
+
         currentMap?.let { map ->
             isMapAdjusted = false
             mapView.recycle()
             resetViewTransformations(mapView)
 
-            // 🎨 Définir la couleur de fond selon le mode
             val backgroundColor = if (darkModeEnabled) {
                 android.graphics.Color.BLACK
             } else {
@@ -337,7 +312,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
             mapView.setBackgroundColor(backgroundColor)
 
-            // ✅ Charger la bonne image selon le mode actuel
             val imageSource = when {
                 map.isBuiltIn -> {
                     val drawableId = if (darkModeEnabled) {
@@ -361,6 +335,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
                 else -> {
                     isLoadingMap = false
+                    hideLoader()
                     return
                 }
             }
@@ -388,34 +363,39 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
             override fun onReady() {
                 map.post {
-                    // Calculer le minScale AVANT adjustMapForRotation
                     val calculatedMinScale = calculateMinScaleWithPadding(map)
                     map.minScale = calculatedMinScale
                     map.maxScale = 2.0f
 
-                    android.util.Log.d("MainActivity", "✅ minScale appliqué: $calculatedMinScale")
+                    android.util.Log.d("MainActivity", "minScale appliqué: $calculatedMinScale")
 
-                    // Ensuite ajuster pour la rotation
                     if (map.isVisible && !isMapAdjusted) {
                         adjustMapForRotation(map)
 
-                        // ✅ Centrer la carte au minScale avec un délai
                         map.postDelayed({
                             val center = android.graphics.PointF(
                                 map.sWidth / 2f,
                                 map.sHeight / 2f
                             )
                             map.setScaleAndCenter(calculatedMinScale, center)
-                            android.util.Log.d("MainActivity", "✅ Carte centrée à $center avec scale $calculatedMinScale")
-                        }, 50)  // Petit délai pour s'assurer que l'ajustement est terminé
+                            android.util.Log.d("MainActivity", "Carte centrée à $center avec scale $calculatedMinScale")
+
+                            hideLoader()
+                        }, 50)
+                    } else {
+                        hideLoader()
                     }
                 }
             }
             override fun onImageLoaded() {}
-            override fun onPreviewLoadError(e: Exception?) {}
+            override fun onPreviewLoadError(e: Exception?) {
+                hideLoader()
+            }
             override fun onTileLoadError(e: Exception?) {}
             override fun onPreviewReleased() {}
-            override fun onImageLoadError(e: Exception?) {}
+            override fun onImageLoadError(e: Exception?) {
+                hideLoader()
+            }
         })
     }
 
@@ -474,35 +454,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.setMinimumTileDpi(320)
         map.setExecutor(Executors.newFixedThreadPool(4))
 
-        // ✅ CRITIQUE : Dire à la bibliothèque d'utiliser NOTRE minScale personnalisé
-        // Sans ça, la bibliothèque recalcule automatiquement le minScale !
         map.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CUSTOM)
     }
 
-    // 🔄 Afficher le loader INSTANTANÉMENT (sans animation)
     private fun showLoader() {
         loadingOverlay.visibility = View.VISIBLE
         loadingOverlay.alpha = 1f
-        // ⚡ Pas d'animation = instantané !
     }
 
-    // 🔄 Masquer le loader RAPIDEMENT
     private fun hideLoader() {
         loadingOverlay.animate()
             .alpha(0f)
-            .setDuration(100)  // ⚡ 100ms au lieu de 200ms
+            .setDuration(100)
             .withEndAction {
                 loadingOverlay.visibility = View.GONE
             }
             .start()
     }
 
-    // ✅ NOUVELLE VERSION SIMPLIFIÉE : Changer juste la source de l'image !
     private fun setMapDarkMode(enabled: Boolean) {
         if (enabled == darkModeEnabled || isLoadingMap) return
         isLoadingMap = true
 
-        // 🔄 Afficher le loader immédiatement
         showLoader()
 
         val currentMapItem = currentMap ?: run {
@@ -511,14 +484,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             return
         }
 
-        // ⚡ OPTIMISATION : Capturer IMMÉDIATEMENT sans attendre
         mapView.post {
-            // Capturer l'état actuel (zoom, position, rotation)
             mapState.capture(mapView)
 
-            android.util.Log.d("MainActivity", "🔄 Changement de mode: ${if (enabled) "Light→Dark" else "Dark→Light"}")
+            android.util.Log.d("MainActivity", "Changement de mode: ${if (enabled) "Light→Dark" else "Dark→Light"}")
 
-            // 🎨 Changer la couleur de fond selon le mode
             val backgroundColor = if (enabled) {
                 android.graphics.Color.BLACK
             } else {
@@ -526,7 +496,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
             mapView.setBackgroundColor(backgroundColor)
 
-            // 2️⃣ Déterminer la nouvelle image à charger
             val newImageSource = when {
                 currentMapItem.isBuiltIn -> {
                     val drawableId = if (enabled) {
@@ -549,55 +518,48 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     ImageSource.uri(currentMapItem.lightImageUri!!)
                 }
                 else -> {
-                    android.util.Log.e("MainActivity", "❌ Pas d'image disponible pour ce mode")
+                    android.util.Log.e("MainActivity", "Pas d'image disponible pour ce mode")
                     isLoadingMap = false
                     hideLoader()
                     return@post
                 }
             }
 
-            // 3️⃣ Changer le mode
             darkModeEnabled = enabled
 
-            // 4️⃣ Changer juste la SOURCE de l'image (pas toute la vue !)
             mapView.recycle()
             mapView.setImage(newImageSource)
 
-            // 5️⃣ Réappliquer l'état sauvegardé quand l'image est prête
             mapView.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
                 override fun onReady() {
                     mapView.post {
-                        // Calculer le minScale AVANT adjustMapForRotation
                         val calculatedMinScale = calculateMinScaleWithPadding(mapView)
                         mapView.minScale = calculatedMinScale
                         mapView.maxScale = 2.0f
 
-                        // Réajuster pour la rotation si nécessaire
                         if (!isMapAdjusted) {
                             adjustMapForRotation(mapView)
                         }
 
-                        // ⚡ OPTIMISATION : Délai réduit à 10ms
                         mapView.postDelayed({
                             mapState.apply(mapView)
                             isLoadingMap = false
 
-                            // 🔄 Masquer le loader
                             hideLoader()
 
-                            android.util.Log.d("MainActivity", "✅ Mode ${if (enabled) "Dark" else "Light"} appliqué avec état préservé")
-                        }, 10)  // ⚡ 10ms au lieu de 50ms
+                            android.util.Log.d("MainActivity", "Mode ${if (enabled) "Dark" else "Light"} appliqué avec état préservé")
+                        }, 10)
                     }
                 }
 
                 override fun onImageLoaded() {}
                 override fun onPreviewLoadError(e: Exception?) {
-                    android.util.Log.e("MainActivity", "❌ Erreur chargement preview", e)
+                    android.util.Log.e("MainActivity", "Erreur chargement preview", e)
                     isLoadingMap = false
                     hideLoader()
                 }
                 override fun onImageLoadError(e: Exception?) {
-                    android.util.Log.e("MainActivity", "❌ Erreur chargement image", e)
+                    android.util.Log.e("MainActivity", "Erreur chargement image", e)
                     isLoadingMap = false
                     hideLoader()
                 }

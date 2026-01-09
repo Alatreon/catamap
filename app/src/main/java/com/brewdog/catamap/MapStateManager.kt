@@ -117,22 +117,17 @@ class MapStateManager {
         state: MapState,
         animated: Boolean
     ) {
-        // Vérifier si c'est la même carte (dimensions identiques)
         val sameDimensions = (mapView.sWidth == state.imageWidth &&
                 mapView.sHeight == state.imageHeight)
 
         if (sameDimensions) {
-            // ✅ MÊME CARTE : Restaurer les limites de zoom EXACTES
-            // Ceci est crucial pour éviter que adjustMapForRotation ne crée des incohérences
             mapView.setMinScale(state.minScale)
             mapView.setMaxScale(state.maxScale)
 
-            // Forcer également via les propriétés (double sécurité)
             mapView.minScale = state.minScale
             mapView.maxScale = state.maxScale
         }
 
-        // Convertir les coordonnées si nécessaire
         val convertedState = if (!sameDimensions) {
             state.convertToNewDimensions(mapView.sWidth, mapView.sHeight)
         } else {
@@ -145,9 +140,7 @@ class MapStateManager {
             convertedState.centerY.coerceIn(0f, mapView.sHeight.toFloat())
         )
 
-        // 🔧 CORRECTION CRITIQUE : Ne pas coercer le scale pour la même carte
         val finalScale = if (sameDimensions) {
-            // ✅ Même carte : Utiliser le scale EXACT capturé (pas de coerce!)
             convertedState.scale
         } else {
             // Carte différente : Vérifier que le scale est dans les limites

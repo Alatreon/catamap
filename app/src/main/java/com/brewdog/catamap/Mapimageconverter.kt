@@ -70,7 +70,7 @@ object MapImageConverter {
                 finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
 
-            android.util.Log.d("MapImageConverter", "✅ Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
+            android.util.Log.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
 
             sourceBitmap.recycle()
             finalBitmap.recycle()
