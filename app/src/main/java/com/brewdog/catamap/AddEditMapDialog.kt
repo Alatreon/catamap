@@ -68,7 +68,13 @@ class AddEditMapDialog : DialogFragment() {
         initializeViews(view)
         setupListeners()
         populateFields()
-        return AlertDialog.Builder(requireContext()).setView(view).create()
+
+        val dialog = AlertDialog.Builder(requireContext()).setView(view).create()
+
+        // ✅ Empêcher la fermeture en cliquant en dehors
+        dialog.setCanceledOnTouchOutside(false)
+
+        return dialog
     }
 
     private fun initializeViews(view: View) {
@@ -100,6 +106,8 @@ class AddEditMapDialog : DialogFragment() {
                 textImageStatus.text = "🔍 Analyse..."
                 progressBar.visibility = View.VISIBLE
                 btnSelectImage.isEnabled = false
+                // ✅ Désactiver le bouton Enregistrer pendant la conversion
+                btnSave.isEnabled = false
 
                 val isDark = withContext(Dispatchers.IO) {
                     MapModeDetector.isImageDarkModeSync(requireContext(), uri)
@@ -132,6 +140,8 @@ class AddEditMapDialog : DialogFragment() {
             } finally {
                 progressBar.visibility = View.GONE
                 btnSelectImage.isEnabled = true
+                // ✅ Réactiver le bouton Enregistrer après la conversion
+                btnSave.isEnabled = true
             }
         }
     }
@@ -198,16 +208,6 @@ class AddEditMapDialog : DialogFragment() {
             .setPositiveButton("Oui") { _, _ -> onDeleteListener?.invoke(); dismiss() }
             .setNegativeButton("Non", null)
             .show()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        processingJob?.cancel()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        processingJob?.cancel()
     }
 
     override fun onDestroy() {
