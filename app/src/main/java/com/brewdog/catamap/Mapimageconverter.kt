@@ -13,19 +13,21 @@ import androidx.core.graphics.createBitmap
 object MapImageConverter {
 
     enum class ConversionMode {
-        INVERT,
-        SMART_DARKEN,
-        SMART_LIGHTEN
+        INVERT
     }
 
     /**
-     * Version optimisée avec GARANTIE de dimensions identiques
+     * Version optimisée avec GARANTIE de dimensions identiques et gestion mémoire sécurisée
      */
     suspend fun generateAlternateVersionOptimized(
         context: Context,
         sourceUri: Uri,
         mode: ConversionMode
     ): Uri? = withContext(Dispatchers.IO) {
+        var sourceBitmap: Bitmap? = null
+        var transformedBitmap: Bitmap? = null
+        var finalBitmap: Bitmap? = null
+
         try {
             // 1. Obtenir les DIMENSIONS EXACTES de l'image source
             val originalDimensions = getImageDimensions(context, sourceUri)
@@ -38,7 +40,7 @@ object MapImageConverter {
             android.util.Log.d("MapImageConverter", "Original dimensions: ${originalWidth}x${originalHeight}")
 
             // 2. Charger l'image source
-            val sourceBitmap = loadBitmapFullSize(context, sourceUri)
+            sourceBitmap = loadBitmapFullSize(context, sourceUri)
             if (sourceBitmap == null) {
                 android.util.Log.e("MapImageConverter", "Cannot load source bitmap")
                 return@withContext null
@@ -46,18 +48,15 @@ object MapImageConverter {
 
             android.util.Log.d("MapImageConverter", "Loaded bitmap: ${sourceBitmap.width}x${sourceBitmap.height}")
 
-            // 3. Appliquer la transformation
-            val transformedBitmap = when (mode) {
-                ConversionMode.INVERT -> applyColorMatrix(sourceBitmap, getInvertMatrix())
-                ConversionMode.SMART_DARKEN -> applyColorMatrix(sourceBitmap, getDarkenMatrix())
-                ConversionMode.SMART_LIGHTEN -> applyColorMatrix(sourceBitmap, getLightenMatrix())
-            }
+            // 3. Appliquer la transformation (inversion des couleurs)
+            transformedBitmap = applyColorMatrix(sourceBitmap, getInvertMatrix())
 
-            // 4. 🔧 FORCER le redimensionnement exact aux dimensions originales
-            val finalBitmap = if (transformedBitmap.width != originalWidth || transformedBitmap.height != originalHeight) {
+            // 4. FORCER le redimensionnement exact aux dimensions originales
+            finalBitmap = if (transformedBitmap.width != originalWidth || transformedBitmap.height != originalHeight) {
                 android.util.Log.d("MapImageConverter", "Resizing from ${transformedBitmap.width}x${transformedBitmap.height} to ${originalWidth}x${originalHeight}")
                 val resized = transformedBitmap.scale(originalWidth, originalHeight)
                 transformedBitmap.recycle()
+                transformedBitmap = null
                 resized
             } else {
                 android.util.Log.d("MapImageConverter", "Dimensions already match, no resize needed")
@@ -72,14 +71,16 @@ object MapImageConverter {
 
             android.util.Log.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
 
-            sourceBitmap.recycle()
-            finalBitmap.recycle()
-
-            Uri.fromFile(outputFile)
+            return@withContext Uri.fromFile(outputFile)
 
         } catch (e: Exception) {
             android.util.Log.e("MapImageConverter", "Error in conversion", e)
-            null
+            return@withContext null
+        } finally {
+            // Garantir la libération de tous les bitmaps, même en cas d'erreur
+            sourceBitmap?.recycle()
+            transformedBitmap?.recycle()
+            finalBitmap?.recycle()
         }
     }
 
@@ -136,24 +137,6 @@ object MapImageConverter {
             -1f, 0f, 0f, 0f, 255f,
             0f, -1f, 0f, 0f, 255f,
             0f, 0f, -1f, 0f, 255f,
-            0f, 0f, 0f, 1f, 0f
-        )
-    )
-
-    private fun getDarkenMatrix() = ColorMatrix(
-        floatArrayOf(
-            0.4f, 0f, 0f, 0f, 0f,
-            0f, 0.4f, 0f, 0f, 0f,
-            0f, 0f, 0.4f, 0f, 0f,
-            0f, 0f, 0f, 1f, 0f
-        )
-    )
-
-    private fun getLightenMatrix() = ColorMatrix(
-        floatArrayOf(
-            1.2f, 0f, 0f, 0f, 50f,
-            0f, 1.2f, 0f, 0f, 50f,
-            0f, 0f, 1.2f, 0f, 50f,
             0f, 0f, 0f, 1f, 0f
         )
     )

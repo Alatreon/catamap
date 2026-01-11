@@ -9,5 +9,5 @@
     <string name="dark_mode">Mode sombre</string>
     <string name="tourner_la_carte">Orienter la carte</string>
     <string name="changer_de_carte">Changer de carte</string>
-    <string name="g_rer_les_cartes">Gérer les cartes</string>
+    <string name="gerer_les_cartes">Gérer les cartes</string>
 </resources>

@@ -9,6 +9,7 @@ import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
+import androidx.lifecycle.lifecycleScope
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
@@ -24,7 +25,6 @@ class AddEditMapDialog : DialogFragment() {
     private var onDeleteListener: (() -> Unit)? = null
     private var selectedLightUri: Uri? = null
     private var selectedDarkUri: Uri? = null
-    private var processingJob: Job? = null
 
     private lateinit var editMapName: TextInputEditText
     private lateinit var spinnerCategory: Spinner
@@ -99,9 +99,10 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     private fun processImage(uri: Uri) {
-        processingJob?.cancel()
-        processingJob = CoroutineScope(Dispatchers.Main).launch {
+        lifecycleScope.launch {
             try {
+                if (!isAdded) return@launch
+
                 textImageStatus.text = "🔍 Analyse..."
                 progressBar.visibility = View.VISIBLE
                 btnSelectImage.isEnabled = false
@@ -111,6 +112,7 @@ class AddEditMapDialog : DialogFragment() {
                     MapModeDetector.isImageDarkModeSync(requireContext(), uri)
                 }
 
+                if (!isAdded) return@launch
                 textImageStatus.text = "⏳ Génération..."
 
                 val negativeUri = withContext(Dispatchers.IO) {
@@ -118,6 +120,8 @@ class AddEditMapDialog : DialogFragment() {
                         requireContext(), uri, MapImageConverter.ConversionMode.INVERT
                     )
                 }
+
+                if (!isAdded) return@launch
 
                 if (negativeUri != null) {
                     if (isDark) {
@@ -133,12 +137,15 @@ class AddEditMapDialog : DialogFragment() {
                     throw Exception("Erreur génération")
                 }
             } catch (e: Exception) {
+                if (!isAdded) return@launch
                 textImageStatus.text = "❌ ${e.message}"
                 selectedLightUri = uri
             } finally {
-                progressBar.visibility = View.GONE
-                btnSelectImage.isEnabled = true
-                btnSave.isEnabled = true
+                if (isAdded) {
+                    progressBar.visibility = View.GONE
+                    btnSelectImage.isEnabled = true
+                    btnSave.isEnabled = true
+                }
             }
         }
     }
@@ -205,10 +212,5 @@ class AddEditMapDialog : DialogFragment() {
             .setPositiveButton("Oui") { _, _ -> onDeleteListener?.invoke(); dismiss() }
             .setNegativeButton("Non", null)
             .show()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        processingJob?.cancel()
     }
 }

@@ -56,8 +56,8 @@ object MapModeDetector {
     }
 
     /**
-     * Méthode 3 : Analyse des coins de l'image
-     * (Les marges/légendes sont souvent révélatrices du mode)
+     * Méthode 3 : Analyse des coins de l'image (optimisée avec échantillonnage)
+     * Les marges/légendes sont souvent révélatrices du mode
      */
     private fun analyzeCorners(bitmap: Bitmap): Boolean {
         val cornerSize = (minOf(bitmap.width, bitmap.height) * 0.1).toInt() // 10% de la taille
@@ -75,13 +75,20 @@ object MapModeDetector {
         var totalLuminosity = 0.0
         var pixelCount = 0
 
+        // Échantillonnage: analyser 1 pixel sur 5 pour réduire la charge
+        val step = 5
+
         for ((startX, startY) in corners) {
-            for (x in startX until (startX + cornerSize).coerceAtMost(bitmap.width)) {
-                for (y in startY until (startY + cornerSize).coerceAtMost(bitmap.height)) {
+            var x = startX
+            while (x < (startX + cornerSize).coerceAtMost(bitmap.width)) {
+                var y = startY
+                while (y < (startY + cornerSize).coerceAtMost(bitmap.height)) {
                     val pixel = bitmap[x, y]
                     totalLuminosity += calculateLuminosity(pixel)
                     pixelCount++
+                    y += step
                 }
+                x += step
             }
         }
 
@@ -160,10 +167,15 @@ object MapModeDetector {
 
     /**
      * Version synchrone pour les tests (utiliser avec précaution sur le thread principal)
+     * Version corrigée avec gestion mémoire sécurisée
      */
     fun isImageDarkModeSync(context: Context, uri: Uri): Boolean {
+        var bitmap: Bitmap? = null
         return try {
-            val bitmap = loadSampledBitmap(context, uri, maxSize = 512) ?: return false
+            bitmap = loadSampledBitmap(context, uri, maxSize = 512)
+            if (bitmap == null) {
+                return false
+            }
 
             val methods = listOf(
                 analyzeWithLuminosity(bitmap),
@@ -173,13 +185,13 @@ object MapModeDetector {
             )
 
             val darkVotes = methods.count { it }
-            bitmap.recycle()
-
             darkVotes >= methods.size / 2
 
         } catch (e: Exception) {
             android.util.Log.e("MapModeDetector", "Error detecting mode", e)
             false
+        } finally {
+            bitmap?.recycle()
         }
     }
 }

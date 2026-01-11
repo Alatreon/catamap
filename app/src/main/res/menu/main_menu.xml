@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
-
     <item
         android:id="@+id/menu_dark_mode"
         android:title="@string/dark_mode"
@@ -26,5 +25,5 @@
         android:checkable="false" />
     <item
         android:id="@+id/menu_map_list"
-        android:title="@string/g_rer_les_cartes" />
+        android:title="@string/gerer_les_cartes" />
 </menu>

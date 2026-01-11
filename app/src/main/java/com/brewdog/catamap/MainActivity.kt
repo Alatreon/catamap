@@ -31,7 +31,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var mapView: AccessibleSubsamplingImageView
     private val mapState = MapState()
     private lateinit var loadingOverlay: FrameLayout
-    private var isUserInteracting = false
     private var darkModeEnabled = true
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
@@ -83,15 +82,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         loadCurrentMap()
-
-        mapView.setOnStateChangedListener(object : SubsamplingScaleImageView.OnStateChangedListener {
-            override fun onCenterChanged(newCenter: PointF?, origin: Int) {
-                isUserInteracting = true
-            }
-            override fun onScaleChanged(newScale: Float, origin: Int) {
-                isUserInteracting = true
-            }
-        })
 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         setupMenuButton()
@@ -373,7 +363,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         adjustMapForRotation(map)
 
                         map.postDelayed({
-                            val center = android.graphics.PointF(
+                            val center = PointF(
                                 map.sWidth / 2f,
                                 map.sHeight / 2f
                             )
@@ -485,9 +475,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         mapView.post {
+            isMapAdjusted = false
             mapState.capture(mapView)
 
             android.util.Log.d("MainActivity", "Changement de mode: ${if (enabled) "Light→Dark" else "Dark→Light"}")
+
+            // Réinitialiser les transformations de la vue avant de charger la nouvelle image
+            mapView.recycle()
+            resetViewTransformations(mapView)
 
             val backgroundColor = if (enabled) {
                 android.graphics.Color.BLACK
@@ -527,7 +522,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             darkModeEnabled = enabled
 
-            mapView.recycle()
             mapView.setImage(newImageSource)
 
             mapView.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
