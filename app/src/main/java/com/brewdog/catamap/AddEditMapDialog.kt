@@ -37,6 +37,9 @@ class AddEditMapDialog : DialogFragment() {
     private lateinit var btnCancel: Button
     private lateinit var btnSave: Button
 
+    // CORRECTION 3: Stocker le Job pour pouvoir l'annuler
+    private var imageProcessingJob: Job? = null
+
     private val selectImageLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -99,52 +102,85 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     private fun processImage(uri: Uri) {
-        lifecycleScope.launch {
+        // CORRECTION 3: Annuler le job précédent s'il existe
+        imageProcessingJob?.cancel()
+
+        // CORRECTION 3: Stocker le nouveau job
+        imageProcessingJob = lifecycleScope.launch {
             try {
+                // Vérifier dès le début si le fragment est attaché
                 if (!isAdded) return@launch
 
-                textImageStatus.text = "🔍 Analyse..."
-                progressBar.visibility = View.VISIBLE
-                btnSelectImage.isEnabled = false
-                btnSave.isEnabled = false
+                // Mise à jour UI - phase 1: Analyse
+                withContext(Dispatchers.Main) {
+                    textImageStatus.text = "Analyse..."
+                    progressBar.visibility = View.VISIBLE
+                    btnSelectImage.isEnabled = false
+                    btnSave.isEnabled = false
+                }
 
+                // Analyse en background
                 val isDark = withContext(Dispatchers.IO) {
                     MapModeDetector.isImageDarkModeSync(requireContext(), uri)
                 }
 
+                // Vérifier à nouveau après l'opération IO
                 if (!isAdded) return@launch
-                textImageStatus.text = "⏳ Génération..."
 
+                // Mise à jour UI - phase 2: Génération
+                withContext(Dispatchers.Main) {
+                    textImageStatus.text = "Generation..."
+                }
+
+                // Génération en background
                 val negativeUri = withContext(Dispatchers.IO) {
                     MapImageConverter.generateAlternateVersionOptimized(
                         requireContext(), uri, MapImageConverter.ConversionMode.INVERT
                     )
                 }
 
+                // Vérifier une dernière fois avant de finaliser
                 if (!isAdded) return@launch
 
-                if (negativeUri != null) {
-                    if (isDark) {
-                        selectedDarkUri = uri
-                        selectedLightUri = negativeUri
+                // Mise à jour UI finale
+                withContext(Dispatchers.Main) {
+                    if (negativeUri != null) {
+                        if (isDark) {
+                            selectedDarkUri = uri
+                            selectedLightUri = negativeUri
+                        } else {
+                            selectedLightUri = uri
+                            selectedDarkUri = negativeUri
+                        }
+                        textImageStatus.text = "Les deux versions pretes"
+                        Toast.makeText(requireContext(), "Carte prete !", Toast.LENGTH_SHORT).show()
                     } else {
-                        selectedLightUri = uri
-                        selectedDarkUri = negativeUri
+                        throw Exception("Erreur generation")
                     }
-                    textImageStatus.text = "Les deux versions prêtes"
-                    Toast.makeText(requireContext(), "✓ Carte prête !", Toast.LENGTH_SHORT).show()
-                } else {
-                    throw Exception("Erreur génération")
                 }
+
+            } catch (e: CancellationException) {
+                // CORRECTION 3: Gestion normale de l'annulation
+                android.util.Log.d("AddEditMapDialog", "Traitement image annulé")
+                // Ne pas afficher d'erreur, c'est une annulation normale
+
             } catch (e: Exception) {
-                if (!isAdded) return@launch
-                textImageStatus.text = "❌ ${e.message}"
-                selectedLightUri = uri
-            } finally {
+                // Gestion des autres erreurs
                 if (isAdded) {
-                    progressBar.visibility = View.GONE
-                    btnSelectImage.isEnabled = true
-                    btnSave.isEnabled = true
+                    withContext(Dispatchers.Main) {
+                        textImageStatus.text = "Erreur: ${e.message}"
+                        selectedLightUri = uri
+                    }
+                }
+
+            } finally {
+                // Réactiver les boutons dans tous les cas
+                if (isAdded) {
+                    withContext(Dispatchers.Main) {
+                        progressBar.visibility = View.GONE
+                        btnSelectImage.isEnabled = true
+                        btnSave.isEnabled = true
+                    }
                 }
             }
         }
@@ -165,13 +201,13 @@ class AddEditMapDialog : DialogFragment() {
                 checkDefaultMap.isChecked = map.isDefault
                 selectedLightUri = map.lightImageUri
                 selectedDarkUri = map.darkImageUri
-                textImageStatus.text = if (map.lightImageUri != null || map.darkImageUri != null) "✓ Image présente" else "Aucune image"
+                textImageStatus.text = if (map.lightImageUri != null || map.darkImageUri != null) "Image presente" else "Aucune image"
                 val category = database.categories.find { it.id == map.categoryId }
                 spinnerCategory.setSelection(categoryNames.indexOf(category?.name).coerceAtLeast(0))
             }
         } else {
             textDateAdded.text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
-            textImageStatus.text = "Aucune image sélectionnée"
+            textImageStatus.text = "Aucune image selectionnee"
         }
     }
 
@@ -182,7 +218,7 @@ class AddEditMapDialog : DialogFragment() {
             return
         }
         if (selectedLightUri == null && selectedDarkUri == null) {
-            Toast.makeText(requireContext(), "Sélectionnez une image", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Selectionnez une image", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -212,5 +248,19 @@ class AddEditMapDialog : DialogFragment() {
             .setPositiveButton("Oui") { _, _ -> onDeleteListener?.invoke(); dismiss() }
             .setNegativeButton("Non", null)
             .show()
+    }
+
+    // CORRECTION 3: Annuler les coroutines lors de la fermeture du dialog
+    override fun onDismiss(dialog: android.content.DialogInterface) {
+        super.onDismiss(dialog)
+        // Annuler le traitement d'image en cours si le dialog est fermé
+        imageProcessingJob?.cancel()
+    }
+
+    // CORRECTION 3 (bonus): Nettoyer également en cas de destruction du fragment
+    override fun onDestroyView() {
+        super.onDestroyView()
+        imageProcessingJob?.cancel()
+        imageProcessingJob = null
     }
 }

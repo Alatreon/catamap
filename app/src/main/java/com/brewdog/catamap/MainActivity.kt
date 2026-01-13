@@ -17,6 +17,7 @@ import android.widget.PopupMenu
 import androidx.appcompat.app.AppCompatActivity
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import androidx.core.view.isVisible
 
@@ -47,6 +48,98 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var isLoadingMap = false
     private var isMapAdjusted = false
     private lateinit var containerFrame: FrameLayout
+
+    // CORRECTION 1: Stocker l'ExecutorService pour le fermer plus tard
+    private var mapExecutor: ExecutorService? = null
+
+    // CORRECTION 2: Créer un listener réutilisable pour éviter l'accumulation
+    private val imageEventListener = object : SubsamplingScaleImageView.OnImageEventListener {
+        override fun onReady() {
+            android.util.Log.d("MainActivity", "imageEventListener.onReady: début, isMapAdjusted=${isMapAdjusted}")
+            mapView.post {
+                val calculatedMinScale = calculateMinScaleWithPadding(mapView)
+                mapView.minScale = calculatedMinScale
+                mapView.maxScale = 2.0f
+
+                if (!isMapAdjusted) {
+                    android.util.Log.d("MainActivity", "imageEventListener: appel adjustMapForRotation")
+                    adjustMapForRotation(mapView)
+                } else {
+                    android.util.Log.d("MainActivity", "imageEventListener: skip adjustMapForRotation car déjà ajusté")
+                }
+
+                mapView.postDelayed({
+                    mapState.apply(mapView)
+                    isLoadingMap = false
+
+                    hideLoader()
+
+                    android.util.Log.d("MainActivity", "Image prête avec état préservé")
+                }, 10)
+            }
+        }
+
+        override fun onImageLoaded() {}
+
+        override fun onPreviewLoadError(e: Exception?) {
+            android.util.Log.e("MainActivity", "Erreur chargement preview", e)
+            isLoadingMap = false
+            hideLoader()
+        }
+
+        override fun onImageLoadError(e: Exception?) {
+            android.util.Log.e("MainActivity", "Erreur chargement image", e)
+            isLoadingMap = false
+            hideLoader()
+        }
+
+        override fun onTileLoadError(e: Exception?) {}
+        override fun onPreviewReleased() {}
+    }
+
+    // Listener spécifique pour le chargement initial d'une nouvelle carte
+    private val initialMapLoadListener = object : SubsamplingScaleImageView.OnImageEventListener {
+        override fun onReady() {
+            mapView.post {
+                val calculatedMinScale = calculateMinScaleWithPadding(mapView)
+                mapView.minScale = calculatedMinScale
+                mapView.maxScale = 2.0f
+
+                android.util.Log.d("MainActivity", "minScale appliqué: $calculatedMinScale")
+
+                if (mapView.isVisible && !isMapAdjusted) {
+                    adjustMapForRotation(mapView)
+
+                    mapView.postDelayed({
+                        val center = PointF(
+                            mapView.sWidth / 2f,
+                            mapView.sHeight / 2f
+                        )
+                        mapView.setScaleAndCenter(calculatedMinScale, center)
+                        android.util.Log.d("MainActivity", "Carte centrée à $center avec scale $calculatedMinScale")
+
+                        hideLoader()
+                    }, 50)
+                } else {
+                    hideLoader()
+                }
+            }
+        }
+
+        override fun onImageLoaded() {}
+
+        override fun onPreviewLoadError(e: Exception?) {
+            hideLoader()
+        }
+
+        override fun onTileLoadError(e: Exception?) {}
+
+        override fun onPreviewReleased() {}
+
+        override fun onImageLoadError(e: Exception?) {
+            hideLoader()
+        }
+    }
 
     companion object {
         const val EXTRA_SELECTED_MAP_ID = "selected_map_id"
@@ -229,6 +322,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 else -> false
             }
         }
+
         popup.show()
     }
 
@@ -242,6 +336,106 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             compassView.visibility = View.VISIBLE
             setSensorsEnabled(true)
         }
+    }
+
+    private fun resetMapRotation() {
+        mapView.rotation = 0f
+        compassView.rotation = 0f
+    }
+
+    private fun loadCurrentMap() {
+        if (isLoadingMap) return
+        isLoadingMap = true
+
+        try {
+            showLoader()
+
+            currentMap?.let { map ->
+                isMapAdjusted = false
+                mapView.recycle()
+                resetViewTransformations(mapView)
+
+                val backgroundColor = if (darkModeEnabled) {
+                    android.graphics.Color.BLACK
+                } else {
+                    android.graphics.Color.WHITE
+                }
+                mapView.setBackgroundColor(backgroundColor)
+
+                val imageSource = when {
+                    map.isBuiltIn -> {
+                        val drawableId = if (darkModeEnabled) {
+                            R.drawable.exemple_2025_dark
+                        } else {
+                            R.drawable.exemple_2025_light
+                        }
+                        ImageSource.resource(drawableId)
+                    }
+                    darkModeEnabled && map.hasDarkMode -> {
+                        val uri = map.darkImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Dark mode activé mais darkImageUri est null")
+                            hideLoader()
+                            return
+                        }
+                    }
+                    !darkModeEnabled && map.hasLightMode -> {
+                        val uri = map.lightImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Light mode activé mais lightImageUri est null")
+                            hideLoader()
+                            return
+                        }
+                    }
+                    map.hasDarkMode -> {
+                        val uri = map.darkImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "hasDarkMode=true mais darkImageUri est null")
+                            hideLoader()
+                            return
+                        }
+                    }
+                    map.hasLightMode -> {
+                        val uri = map.lightImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Carte a hasLightMode mais lightImageUri est null")
+                            hideLoader()
+                            return
+                        }
+                    }
+                    else -> {
+                        hideLoader()
+                        return
+                    }
+                }
+
+                mapView.setImage(imageSource)
+                // CORRECTION 2: Utiliser le listener pour chargement initial
+                mapView.setOnImageEventListener(initialMapLoadListener)
+                resetMapRotation()
+            }
+        } finally {
+            isLoadingMap = false
+        }
+    }
+
+    private fun resetViewTransformations(view: SubsamplingScaleImageView) {
+        view.rotation = 0f
+        view.translationX = 0f
+        view.translationY = 0f
+        view.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        view.requestLayout()
     }
 
     private fun calculateMinScaleWithPadding(map: SubsamplingScaleImageView): Float {
@@ -279,123 +473,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return correctedMinScale
     }
 
-    private fun resetMapRotation() {
-        mapView.rotation = 0f
-        compassView.rotation = 0f
-    }
-
-    private fun loadCurrentMap() {
-        if (isLoadingMap) return
-        isLoadingMap = true
-
-        showLoader()
-
-        currentMap?.let { map ->
-            isMapAdjusted = false
-            mapView.recycle()
-            resetViewTransformations(mapView)
-
-            val backgroundColor = if (darkModeEnabled) {
-                android.graphics.Color.BLACK
-            } else {
-                android.graphics.Color.WHITE
-            }
-            mapView.setBackgroundColor(backgroundColor)
-
-            val imageSource = when {
-                map.isBuiltIn -> {
-                    val drawableId = if (darkModeEnabled) {
-                        R.drawable.exemple_2025_dark
-                    } else {
-                        R.drawable.exemple_2025_light
-                    }
-                    ImageSource.resource(drawableId)
-                }
-                darkModeEnabled && map.hasDarkMode -> {
-                    ImageSource.uri(map.darkImageUri!!)
-                }
-                !darkModeEnabled && map.hasLightMode -> {
-                    ImageSource.uri(map.lightImageUri!!)
-                }
-                map.hasDarkMode -> {
-                    ImageSource.uri(map.darkImageUri!!)
-                }
-                map.hasLightMode -> {
-                    ImageSource.uri(map.lightImageUri!!)
-                }
-                else -> {
-                    isLoadingMap = false
-                    hideLoader()
-                    return
-                }
-            }
-
-            mapView.setImage(imageSource)
-            setupMapListenerForNewMap(mapView)
-            resetMapRotation()
-        }
-
-        isLoadingMap = false
-    }
-
-    private fun resetViewTransformations(view: SubsamplingScaleImageView) {
-        view.rotation = 0f
-        view.translationX = 0f
-        view.translationY = 0f
-        view.layoutParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.MATCH_PARENT
-        )
-        view.requestLayout()
-    }
-
-    private fun setupMapListenerForNewMap(map: SubsamplingScaleImageView) {
-        map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
-            override fun onReady() {
-                map.post {
-                    val calculatedMinScale = calculateMinScaleWithPadding(map)
-                    map.minScale = calculatedMinScale
-                    map.maxScale = 2.0f
-
-                    android.util.Log.d("MainActivity", "minScale appliqué: $calculatedMinScale")
-
-                    if (map.isVisible && !isMapAdjusted) {
-                        adjustMapForRotation(map)
-
-                        map.postDelayed({
-                            val center = PointF(
-                                map.sWidth / 2f,
-                                map.sHeight / 2f
-                            )
-                            map.setScaleAndCenter(calculatedMinScale, center)
-                            android.util.Log.d("MainActivity", "Carte centrée à $center avec scale $calculatedMinScale")
-
-                            hideLoader()
-                        }, 50)
-                    } else {
-                        hideLoader()
-                    }
-                }
-            }
-            override fun onImageLoaded() {}
-            override fun onPreviewLoadError(e: Exception?) {
-                hideLoader()
-            }
-            override fun onTileLoadError(e: Exception?) {}
-            override fun onPreviewReleased() {}
-            override fun onImageLoadError(e: Exception?) {
-                hideLoader()
-            }
-        })
-    }
-
     private fun adjustMapForRotation(map: SubsamplingScaleImageView) {
         if (map.width == 0 || map.height == 0) {
+            android.util.Log.d("MainActivity", "adjustMapForRotation: width ou height à 0, retry dans 50ms")
             map.postDelayed({ adjustMapForRotation(map) }, 50)
             return
         }
 
         if (isMapAdjusted) {
+            android.util.Log.d("MainActivity", "adjustMapForRotation: déjà ajusté, skip")
             return
         }
 
@@ -408,6 +494,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         val paddingNeeded = ((screenDiagonal - minOf(imageWidth, imageHeight)) / 2f * 1.1f).toInt()
 
+        android.util.Log.d("MainActivity", "adjustMapForRotation: écran=${screenWidth}x${screenHeight}, image=${imageWidth}x${imageHeight}, padding=${paddingNeeded}")
+
         val params = FrameLayout.LayoutParams(
             imageWidth + paddingNeeded * 2,
             imageHeight + paddingNeeded * 2
@@ -419,11 +507,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.translationY = -paddingNeeded.toFloat()
 
         map.post {
-            map.pivotX = (imageWidth + paddingNeeded * 2) / 2f
-            map.pivotY = (imageHeight + paddingNeeded * 2) / 2f
+            val pivotX = (imageWidth + paddingNeeded * 2) / 2f
+            val pivotY = (imageHeight + paddingNeeded * 2) / 2f
+            map.pivotX = pivotX
+            map.pivotY = pivotY
+            android.util.Log.d("MainActivity", "adjustMapForRotation: pivot défini à (${pivotX}, ${pivotY})")
         }
 
         isMapAdjusted = true
+        android.util.Log.d("MainActivity", "adjustMapForRotation: TERMINE, isMapAdjusted=true")
     }
 
     private fun setupRotationTouch(map: AccessibleSubsamplingImageView) {
@@ -442,7 +534,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.setPanLimit(SubsamplingScaleImageView.PAN_LIMIT_OUTSIDE)
         map.setMaxTileSize(4096)
         map.setMinimumTileDpi(320)
-        map.setExecutor(Executors.newFixedThreadPool(4))
+
+        // CORRECTION 1: Stocker l'executor pour le fermer plus tard
+        // ExecutorService hérite de Executor, donc le cast est correct
+        mapExecutor = Executors.newFixedThreadPool(4)
+        map.setExecutor(mapExecutor as java.util.concurrent.Executor)
 
         map.setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CUSTOM)
     }
@@ -463,6 +559,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun setMapDarkMode(enabled: Boolean) {
+        android.util.Log.d("MainActivity", "setMapDarkMode: début, enabled=${enabled}, darkModeEnabled=${darkModeEnabled}, isLoadingMap=${isLoadingMap}")
         if (enabled == darkModeEnabled || isLoadingMap) return
         isLoadingMap = true
 
@@ -475,13 +572,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         mapView.post {
+            android.util.Log.d("MainActivity", "setMapDarkMode: dans post, avant isMapAdjusted=false")
             isMapAdjusted = false
             mapState.capture(mapView)
 
             android.util.Log.d("MainActivity", "Changement de mode: ${if (enabled) "Light→Dark" else "Dark→Light"}")
 
-            // Réinitialiser les transformations de la vue avant de charger la nouvelle image
-            mapView.recycle()
+            // ✅ OPTIMISATION P0: recycle() supprimé (setImage() le fait déjà)
             resetViewTransformations(mapView)
 
             val backgroundColor = if (enabled) {
@@ -501,16 +598,48 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     ImageSource.resource(drawableId)
                 }
                 enabled && currentMapItem.hasDarkMode -> {
-                    ImageSource.uri(currentMapItem.darkImageUri!!)
+                    val uri = currentMapItem.darkImageUri
+                    if (uri != null) {
+                        ImageSource.uri(uri)
+                    } else {
+                        android.util.Log.e("MainActivity", "Dark mode demandé mais darkImageUri est null")
+                        isLoadingMap = false
+                        hideLoader()
+                        return@post
+                    }
                 }
                 !enabled && currentMapItem.hasLightMode -> {
-                    ImageSource.uri(currentMapItem.lightImageUri!!)
+                    val uri = currentMapItem.lightImageUri
+                    if (uri != null) {
+                        ImageSource.uri(uri)
+                    } else {
+                        android.util.Log.e("MainActivity", "Light mode demandé mais lightImageUri est null")
+                        isLoadingMap = false
+                        hideLoader()
+                        return@post
+                    }
                 }
                 currentMapItem.hasDarkMode -> {
-                    ImageSource.uri(currentMapItem.darkImageUri!!)
+                    val uri = currentMapItem.darkImageUri
+                    if (uri != null) {
+                        ImageSource.uri(uri)
+                    } else {
+                        android.util.Log.e("MainActivity", "hasDarkMode=true mais darkImageUri est null")
+                        isLoadingMap = false
+                        hideLoader()
+                        return@post
+                    }
                 }
                 currentMapItem.hasLightMode -> {
-                    ImageSource.uri(currentMapItem.lightImageUri!!)
+                    val uri = currentMapItem.lightImageUri
+                    if (uri != null) {
+                        ImageSource.uri(uri)
+                    } else {
+                        android.util.Log.e("MainActivity", "hasLightMode=true mais lightImageUri est null")
+                        isLoadingMap = false
+                        hideLoader()
+                        return@post
+                    }
                 }
                 else -> {
                     android.util.Log.e("MainActivity", "Pas d'image disponible pour ce mode")
@@ -524,42 +653,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             mapView.setImage(newImageSource)
 
-            mapView.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
-                override fun onReady() {
-                    mapView.post {
-                        val calculatedMinScale = calculateMinScaleWithPadding(mapView)
-                        mapView.minScale = calculatedMinScale
-                        mapView.maxScale = 2.0f
-
-                        if (!isMapAdjusted) {
-                            adjustMapForRotation(mapView)
-                        }
-
-                        mapView.postDelayed({
-                            mapState.apply(mapView)
-                            isLoadingMap = false
-
-                            hideLoader()
-
-                            android.util.Log.d("MainActivity", "Mode ${if (enabled) "Dark" else "Light"} appliqué avec état préservé")
-                        }, 10)
-                    }
-                }
-
-                override fun onImageLoaded() {}
-                override fun onPreviewLoadError(e: Exception?) {
-                    android.util.Log.e("MainActivity", "Erreur chargement preview", e)
-                    isLoadingMap = false
-                    hideLoader()
-                }
-                override fun onImageLoadError(e: Exception?) {
-                    android.util.Log.e("MainActivity", "Erreur chargement image", e)
-                    isLoadingMap = false
-                    hideLoader()
-                }
-                override fun onTileLoadError(e: Exception?) {}
-                override fun onPreviewReleased() {}
-            })
+            // CORRECTION 2: Utiliser le listener unique réutilisable
+            mapView.setOnImageEventListener(imageEventListener)
         }
     }
 
@@ -568,14 +663,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager.unregisterListener(this)
     }
 
-    override fun onStop() {
-        super.onStop()
-        sensorManager.unregisterListener(this)
-    }
+    // CORRECTION 3: Supprimer onStop redondant
+    // override fun onStop() était redondant avec onPause
 
     override fun onDestroy() {
         super.onDestroy()
         sensorManager.unregisterListener(this)
+
+        // CORRECTION 1: Fermer l'ExecutorService pour libérer les threads
+        mapExecutor?.shutdown()
+        mapExecutor = null
+
+        // CORRECTION 2: Nettoyer le listener
+        mapView.setOnImageEventListener(null)
+
+        // Libérer les ressources de la vue
+        mapView.recycle()
     }
 
     override fun onSensorChanged(event: SensorEvent) {

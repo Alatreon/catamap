@@ -26,4 +26,5 @@
     <item
         android:id="@+id/menu_map_list"
         android:title="@string/gerer_les_cartes" />
+
 </menu>
