@@ -90,7 +90,7 @@ class MapListAdapter(
     /**
      * ViewHolder pour les en-têtes de catégorie
      */
-    inner class CategoryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    class CategoryViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val categoryName: TextView = view.findViewById(R.id.categoryName)
 
         fun bind(category: Category) {

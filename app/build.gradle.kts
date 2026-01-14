@@ -5,11 +5,11 @@ plugins {
 
 android {
     namespace = "com.brewdog.catamap"
-    compileSdk = 36  // ✅ Corrigé ici
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.brewdog.catamap"
-        minSdk = 34
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -47,7 +47,11 @@ dependencies {
 
     // KTX extensions (si pas déjà dans libs)
     implementation("androidx.core:core-ktx:1.12.0")
+    // Palette pour l'analyse des couleurs
+    implementation("androidx.palette:palette-ktx:1.0.0")
 
+    // Coroutines (si pas déjà présent)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

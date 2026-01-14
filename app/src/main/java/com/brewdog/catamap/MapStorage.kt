@@ -12,12 +12,13 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
+import com.google.gson.annotations.SerializedName
 import java.lang.reflect.Type
 
 /**
  * Gestion du stockage persistant des cartes et catégories
  */
-class MapStorage(private val context: Context) {
+class MapStorage(context: Context) {
 
     private val prefs = context.getSharedPreferences("map_database", Context.MODE_PRIVATE)
     private val gson: Gson = GsonBuilder()
@@ -66,7 +67,9 @@ class MapStorage(private val context: Context) {
             isDefault = true,
             hasLightMode = true,
             hasDarkMode = true,
-            isBuiltIn = true // Carte embarquée
+            isBuiltIn = true, // Carte embarquée
+            lightMinimapUri = null,
+            darkMinimapUri = null
         )
 
         database.addOrUpdateMap(exampleMap)
@@ -88,15 +91,6 @@ class MapStorage(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
             false
-        }
-    }
-
-    /**
-     * Efface toutes les données (pour debug/reset)
-     */
-    fun clear() {
-        prefs.edit {
-            clear()
         }
     }
 

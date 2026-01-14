@@ -40,9 +40,10 @@ class CategoryManagerDialog : DialogFragment() {
     }
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
-        val view = LayoutInflater.from(requireContext())
-            .inflate(R.layout.dialog_category_manager, null)
-
+        val view = requireActivity().layoutInflater.inflate(
+            R.layout.dialog_category_manager,
+            null
+        )
         categoryRecyclerView = view.findViewById(R.id.categoryRecyclerView)
         val btnAddCategory = view.findViewById<Button>(R.id.btnAddCategory)
         val btnClose = view.findViewById<Button>(R.id.btnClose)
@@ -60,7 +61,7 @@ class CategoryManagerDialog : DialogFragment() {
         btnAddCategory.setOnClickListener { showAddCategoryDialog() }
         btnClose.setOnClickListener { dismiss() }
 
-        return AlertDialog.Builder(requireContext())
+        return AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setView(view)
             .create()
     }
@@ -69,7 +70,7 @@ class CategoryManagerDialog : DialogFragment() {
         val input = EditText(requireContext())
         input.hint = "Nom de la catégorie"
 
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Nouvelle catégorie")
             .setView(input)
             .setPositiveButton("Ajouter") { _, _ ->
@@ -101,7 +102,7 @@ class CategoryManagerDialog : DialogFragment() {
             return
         }
 
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Supprimer la catégorie")
             .setMessage("Toutes les cartes de cette catégorie seront déplacées vers \"Sans catégorie\". Continuer ?")
             .setPositiveButton("Supprimer") { _, _ ->
@@ -141,7 +142,6 @@ class CategoryManagerDialog : DialogFragment() {
             fun bind(category: Category) {
                 categoryName.text = category.name
 
-                // Désactiver le bouton supprimer pour "Sans catégorie"
                 if (category.isSystem) {
                     btnDelete.isEnabled = false
                     btnDelete.alpha = 0.3f

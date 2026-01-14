@@ -1,28 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
-        android:id="@+id/action_rotate_with_compass"
-        android:title="@string/tourner_la_carte"
-        android:checkable="true"
-        android:checked="false"/>
-    <item
-        android:id="@+id/action_dark_mode"
+        android:id="@+id/menu_dark_mode"
         android:title="@string/dark_mode"
         android:checkable="true"
         android:checked="true" />
     <item
-        android:id="@+id/action_battery_saver"
+        android:id="@+id/menu_rotate_compass"
+        android:title="@string/tourner_la_carte"
+        android:checkable="true"
+        android:checked="false"/>
+    <item
+        android:id="@+id/menu_battery_saver"
         android:title="@string/conomie_de_batterie"
         android:checkable="true" />
     <item
-        android:id="@+id/action_manual_rotate"
+        android:id="@+id/menu_minimap"
+        android:title="@string/minimap"
+        android:checkable="true"/>
+    <item
+        android:id="@+id/menu_rotate_manual"
         android:title="@string/rotation_manuelle"
         android:checkable="true"
         android:checked="false"/>
     <item
-        android:id="@+id/action_reset_rotation"
+        android:id="@+id/menu_reset_rotation"
         android:title="@string/orienter_vers_le_nord"
         android:checkable="false" />
     <item
-        android:id="@+id/action_manage_maps"
-        android:title="Gérer les cartes"/>
+        android:id="@+id/menu_map_list"
+        android:title="@string/gerer_les_cartes" />
+
 </menu>

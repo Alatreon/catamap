@@ -1,50 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/rootContainer"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="false">
 
-    <!-- Carte sombre -->
+    <!-- ✅ UNE SEULE VUE au lieu de 2 (mapViewDark + mapViewLight) -->
     <com.brewdog.catamap.AccessibleSubsamplingImageView
-        android:id="@+id/mapViewDark"
+        android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="@android:color/black"
         app:panEnabled="true"
         app:zoomEnabled="true"/>
 
-    <!-- Carte claire -->
-    <com.brewdog.catamap.AccessibleSubsamplingImageView
-        android:id="@+id/mapViewLight"
+    <!-- 🔄 LOADER TRANSPARENT - La carte reste visible ! -->
+    <FrameLayout
+        android:id="@+id/loadingOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="@android:color/white"
         android:visibility="gone"
-        app:panEnabled="true"
-        app:zoomEnabled="true"/>
+        android:clickable="true"
+        android:focusable="true">
 
-    <!-- Bouton menu -->
+        <!-- Spinner en haut à droite (comme la boussole) -->
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top|start"
+            android:layout_marginTop="88dp"
+            android:layout_marginStart="8dp"
+            android:indeterminate="true"
+            android:indeterminateTint="@android:color/white"
+            android:background="@drawable/loader_background"
+            android:padding="8dp"/>
+
+    </FrameLayout>
+
+    <!-- Bouton menu (marge dynamique appliquée via code) -->
     <ImageButton
         android:id="@+id/menuButton"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="24dp"
         android:layout_gravity="start|top"
         android:background="@android:color/transparent"
         android:src="@drawable/ic_menu"
         android:contentDescription="@string/menu_description"/>
 
-    <!-- Boussole -->
+    <!-- Boussole (marge dynamique appliquée via code) -->
     <ImageView
         android:id="@+id/compassView"
         android:layout_width="64dp"
         android:layout_height="64dp"
-        android:layout_marginTop="24dp"
         android:layout_marginEnd="8dp"
         android:background="@android:color/transparent"
         android:src="@drawable/compass"
         android:layout_gravity="top|end"
         android:contentDescription="@string/boussole"/>
+
+    <com.brewdog.catamap.MinimapView
+        android:id="@+id/minimapView"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:visibility="gone"
+        android:elevation="4dp"
+        tools:ignore="HardcodedDimension"/>
 
 </FrameLayout>

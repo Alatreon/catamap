@@ -17,6 +17,16 @@ import android.widget.PopupMenu
 import androidx.appcompat.app.AppCompatActivity
 import com.davemorrissey.labs.subscaleview.ImageSource
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import androidx.core.view.isVisible
+import kotlinx.coroutines.Dispatchers
+import java.util.concurrent.Executor
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
 
@@ -26,10 +36,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var azimuthFiltered = 0f
     private lateinit var compassView: ImageView
     private var rotateWithCompass = false
-    lateinit var mapViewLight: AccessibleSubsamplingImageView
-    lateinit var mapViewDark: AccessibleSubsamplingImageView
-    lateinit var mapView: AccessibleSubsamplingImageView
-    private var isUserInteracting = false
+    private lateinit var mapView: AccessibleSubsamplingImageView
+    private val mapState = MapState()
+    private lateinit var loadingOverlay: FrameLayout
     private var darkModeEnabled = true
     private val rotationMatrix = FloatArray(9)
     private val orientationAngles = FloatArray(3)
@@ -40,14 +49,107 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var batterySaverEnabled = false
     private lateinit var rotationDetector: RotationGestureDetector
     private var manualRotateEnabled = false
-
-    // Gestion des cartes
     private lateinit var storage: MapStorage
     private lateinit var database: MapDatabase
     private var currentMap: MapItem? = null
     private var isLoadingMap = false
-    private val adjustedMaps = mutableSetOf<SubsamplingScaleImageView>()
-    private lateinit var containerFrame: FrameLayout // Pour connaître la taille de l'écran
+    private var isMapAdjusted = false
+    private lateinit var containerFrame: FrameLayout
+    private var mapExecutor: ExecutorService? = null
+    private var adjustMapRetryCount = 0
+    private val maxAdjustRetries = 20
+    private val MINIMAP_SCREEN_PERCENT = 0.40f  // 18% de la largeur écran
+    private var minimapController: MinimapController? = null
+    private var minimapEnabled = false
+
+    private val imageEventListener = object : SubsamplingScaleImageView.OnImageEventListener {
+        override fun onReady() {
+            android.util.Log.d("MainActivity", "imageEventListener.onReady: début, isMapAdjusted=${isMapAdjusted}")
+            mapView.post {
+                val calculatedMinScale = calculateMinScaleWithPadding(mapView)
+                mapView.minScale = calculatedMinScale
+                mapView.maxScale = 2.0f
+
+                if (!isMapAdjusted) {
+                    android.util.Log.d("MainActivity", "imageEventListener: appel adjustMapForRotation")
+                    adjustMapForRotation(mapView)
+                } else {
+                    android.util.Log.d("MainActivity", "imageEventListener: skip adjustMapForRotation car déjà ajusté")
+                }
+
+                mapView.postDelayed({
+                    mapState.apply(mapView)
+                    isLoadingMap = false
+                    minimapController?.updateViewport()
+                    hideLoader()
+
+                    android.util.Log.d("MainActivity", "Image prête avec état préservé")
+                }, 10)
+            }
+        }
+
+        override fun onImageLoaded() {}
+
+        override fun onPreviewLoadError(e: Exception?) {
+            android.util.Log.e("MainActivity", "Erreur chargement preview", e)
+            isLoadingMap = false
+            hideLoader()
+        }
+
+        override fun onImageLoadError(e: Exception?) {
+            android.util.Log.e("MainActivity", "Erreur chargement image", e)
+            isLoadingMap = false
+            hideLoader()
+        }
+
+        override fun onTileLoadError(e: Exception?) {}
+        override fun onPreviewReleased() {}
+    }
+
+    // Listener spécifique pour le chargement initial d'une nouvelle carte
+    private val initialMapLoadListener = object : SubsamplingScaleImageView.OnImageEventListener {
+        override fun onReady() {
+            mapView.post {
+                val calculatedMinScale = calculateMinScaleWithPadding(mapView)
+                mapView.minScale = calculatedMinScale
+                mapView.maxScale = 2.0f
+
+                android.util.Log.d("MainActivity", "minScale appliqué: $calculatedMinScale")
+
+                if (mapView.isVisible && !isMapAdjusted) {
+                    adjustMapForRotation(mapView)
+
+                    mapView.postDelayed({
+                        val center = PointF(
+                            mapView.sWidth / 2f,
+                            mapView.sHeight / 2f
+                        )
+                        mapView.setScaleAndCenter(calculatedMinScale, center)
+                        android.util.Log.d("MainActivity", "Carte centrée à $center avec scale $calculatedMinScale")
+
+                        minimapController?.updateViewport()
+                        hideLoader()
+                    }, 50)
+                } else {
+                    hideLoader()
+                }
+            }
+        }
+
+        override fun onImageLoaded() {}
+
+        override fun onPreviewLoadError(e: Exception?) {
+            hideLoader()
+        }
+
+        override fun onTileLoadError(e: Exception?) {}
+
+        override fun onPreviewReleased() {}
+
+        override fun onImageLoadError(e: Exception?) {
+            hideLoader()
+        }
+    }
 
     companion object {
         const val EXTRA_SELECTED_MAP_ID = "selected_map_id"
@@ -61,13 +163,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         storage = MapStorage(this)
         database = storage.load()
 
-        containerFrame = findViewById(android.R.id.content) // Container principal
+        containerFrame = findViewById(android.R.id.content)
         compassView = findViewById(R.id.compassView)
-        mapViewLight = findViewById(R.id.mapViewLight)
-        mapViewDark = findViewById(R.id.mapViewDark)
 
-        setupMapView(mapViewLight)
-        setupMapView(mapViewDark)
+        mapView = findViewById(R.id.mapView)
+
+        loadingOverlay = findViewById(R.id.loadingOverlay)
+
+        setupWindowInsets()
+        setupMapView(mapView)
+        setupMinimap()
 
         val selectedMapId = intent.getStringExtra(EXTRA_SELECTED_MAP_ID)
         currentMap = if (selectedMapId != null) {
@@ -82,15 +187,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         loadCurrentMap()
 
-        mapView.setOnStateChangedListener(object : SubsamplingScaleImageView.OnStateChangedListener {
-            override fun onCenterChanged(newCenter: PointF?, origin: Int) {
-                isUserInteracting = true
-            }
-            override fun onScaleChanged(newScale: Float, origin: Int) {
-                isUserInteracting = true
-            }
-        })
-
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         setupMenuButton()
 
@@ -100,8 +196,31 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        setupRotationTouch(mapViewDark)
-        setupRotationTouch(mapViewLight)
+        setupRotationTouch(mapView)
+    }
+
+    private fun setupWindowInsets() {
+        val rootContainer = findViewById<FrameLayout>(R.id.rootContainer)
+        val menuButton = findViewById<ImageButton>(R.id.menuButton)
+
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { _, insets ->
+            val systemBars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            val statusBarHeight = systemBars.top
+            val marginDp = -8
+            val marginPx = (marginDp * resources.displayMetrics.density).toInt()
+
+            (menuButton.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = statusBarHeight + marginPx
+            }
+            menuButton.requestLayout()
+
+            (compassView.layoutParams as FrameLayout.LayoutParams).apply {
+                topMargin = statusBarHeight + marginPx
+            }
+            compassView.requestLayout()
+
+            insets
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -123,95 +242,217 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         super.onResume()
         database = storage.load()
 
-        if (currentMap != null && database.maps.none { it.id == currentMap!!.id }) {
-            currentMap = database.maps.firstOrNull { it.isDefault }
+        val currentMapId = currentMap?.id
+        val updatedMap = database.maps.find { it.id == currentMapId }
+
+        if (updatedMap != null && updatedMap != currentMap) {
+            currentMap = updatedMap
             loadCurrentMap()
         }
 
-        updateSensors()
+        if (!batterySaverEnabled) {
+            setSensorsEnabled(true)
+        }
+    }
+
+    private fun setSensorsEnabled(enabled: Boolean) {
+        if (enabled) {
+            sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also { accelerometer ->
+                sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
+            }
+            sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also { magnetometer ->
+                sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_UI)
+            }
+        } else {
+            sensorManager.unregisterListener(this)
+        }
+    }
+
+    private fun setupMenuButton() {
+        val menuButton = findViewById<ImageButton>(R.id.menuButton)
+        menuButton.setOnClickListener {
+            showMenu()
+        }
+    }
+
+    private fun showMenu() {
+        val menuButton = findViewById<ImageButton>(R.id.menuButton)
+        val popup = PopupMenu(this, menuButton)
+        popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
+
+        popup.menu.findItem(R.id.menu_dark_mode)?.isChecked = darkModeEnabled
+        popup.menu.findItem(R.id.menu_rotate_compass)?.isChecked = rotateWithCompass
+        popup.menu.findItem(R.id.menu_rotate_manual)?.isChecked = manualRotateEnabled
+        popup.menu.findItem(R.id.menu_battery_saver)?.isChecked = batterySaverEnabled
+        popup.menu.findItem(R.id.menu_minimap)?.isChecked = minimapEnabled
+        popup.menu.findItem(R.id.menu_reset_rotation)?.isVisible = manualRotateEnabled
+
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.menu_map_list -> {
+                    val intent = Intent(this, MapManagerActivity::class.java)
+                    startActivity(intent)
+                    true
+                }
+                R.id.menu_dark_mode -> {
+                    setMapDarkMode(!darkModeEnabled)
+                    true
+                }
+                R.id.menu_rotate_compass -> {
+                    rotateWithCompass = !rotateWithCompass
+                    item.isChecked = rotateWithCompass
+                    if (rotateWithCompass) {
+                        manualRotateEnabled = false
+                        resetMapRotation()
+                    } else {
+                        resetMapRotation()
+                    }
+                    updateRotationAndCompass()
+                    true
+                }
+                R.id.menu_rotate_manual -> {
+                    manualRotateEnabled = !manualRotateEnabled
+                    item.isChecked = manualRotateEnabled
+                    if (manualRotateEnabled) {
+                        rotateWithCompass = false
+                    } else {
+                        resetMapRotation()
+                    }
+                    true
+                }
+                R.id.menu_battery_saver -> {
+                    batterySaverEnabled = !batterySaverEnabled
+                    item.isChecked = batterySaverEnabled
+                    updateRotationAndCompass()
+                    true
+                }
+                R.id.menu_minimap -> {
+                    minimapEnabled = !minimapEnabled
+                    item.isChecked = minimapEnabled
+
+                    // Sauvegarder la préférence
+                    getSharedPreferences("settings", MODE_PRIVATE).edit().apply {
+                        putBoolean("minimap_enabled", minimapEnabled)
+                        apply()
+                    }
+
+                    updateMinimapVisibility()
+                    true
+                }
+                R.id.menu_reset_rotation -> {
+                    resetMapRotation()
+                    true
+                }
+                else -> false
+            }
+        }
+
+        popup.show()
+    }
+
+    private fun updateRotationAndCompass() {
+        if (batterySaverEnabled) {
+            rotateWithCompass = false
+            compassView.visibility = View.GONE
+            resetMapRotation()
+            setSensorsEnabled(false)
+        } else {
+            compassView.visibility = View.VISIBLE
+            setSensorsEnabled(true)
+        }
+    }
+
+    private fun resetMapRotation() {
+        mapView.rotation = 0f
+        compassView.rotation = 0f
     }
 
     private fun loadCurrentMap() {
         if (isLoadingMap) return
         isLoadingMap = true
 
-        currentMap?.let { map ->
-            // RÉINITIALISATION COMPLÈTE lors du changement de carte
-            adjustedMaps.clear()
-            mapViewLight.recycle()
-            mapViewDark.recycle()
+        try {
+            showLoader()
 
-            // Réinitialiser les transformations
-            resetViewTransformations(mapViewLight)
-            resetViewTransformations(mapViewDark)
+            currentMap?.let { map ->
+                isMapAdjusted = false
+                mapView.recycle()
+                resetViewTransformations(mapView)
 
-            if (map.isBuiltIn) {
-                // Carte embarquée : charger les deux images
-                mapViewLight.setImage(ImageSource.resource(R.drawable.exemple_2025_light))
-                mapViewDark.setImage(ImageSource.resource(R.drawable.exemple_2025_dark))
-
-                setupMapListenerForNewMap(mapViewLight)
-                setupMapListenerForNewMap(mapViewDark)
-
-                if (darkModeEnabled) {
-                    mapViewDark.visibility = View.VISIBLE
-                    mapViewLight.visibility = View.GONE
-                    mapView = mapViewDark
+                val backgroundColor = if (darkModeEnabled) {
+                    android.graphics.Color.BLACK
                 } else {
-                    mapViewLight.visibility = View.VISIBLE
-                    mapViewDark.visibility = View.GONE
-                    mapView = mapViewLight
+                    android.graphics.Color.WHITE
                 }
-            } else {
-                // Carte externe : charger les images appropriées
-                if (map.hasLightMode && map.hasDarkMode) {
-                    // La carte a les deux modes : charger les deux images
-                    mapViewLight.setImage(ImageSource.uri(map.lightImageUri!!))
-                    mapViewDark.setImage(ImageSource.uri(map.darkImageUri!!))
+                mapView.setBackgroundColor(backgroundColor)
 
-                    setupMapListenerForNewMap(mapViewLight)
-                    setupMapListenerForNewMap(mapViewDark)
-
-                    if (darkModeEnabled) {
-                        mapViewDark.visibility = View.VISIBLE
-                        mapViewLight.visibility = View.GONE
-                        mapView = mapViewDark
-                    } else {
-                        mapViewLight.visibility = View.VISIBLE
-                        mapViewDark.visibility = View.GONE
-                        mapView = mapViewLight
+                val imageSource = when {
+                    map.isBuiltIn -> {
+                        val drawableId = if (darkModeEnabled) {
+                            R.drawable.exemple_2025_dark
+                        } else {
+                            R.drawable.exemple_2025_light
+                        }
+                        ImageSource.resource(drawableId)
                     }
-                } else {
-                    // Une seule image : utiliser mapViewDark
-                    val uri = if (darkModeEnabled && map.hasDarkMode) {
-                        map.darkImageUri
-                    } else if (!darkModeEnabled && map.hasLightMode) {
-                        map.lightImageUri
-                    } else {
-                        map.darkImageUri ?: map.lightImageUri
+                    darkModeEnabled && map.hasDarkMode -> {
+                        val uri = map.darkImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Dark mode activé mais darkImageUri est null")
+                            hideLoader()
+                            return
+                        }
                     }
-
-                    if (uri != null) {
-                        mapViewDark.setImage(ImageSource.uri(uri))
-                        setupMapListenerForNewMap(mapViewDark)
-
-                        mapViewDark.visibility = View.VISIBLE
-                        mapViewLight.visibility = View.GONE
-                        mapView = mapViewDark
+                    !darkModeEnabled && map.hasLightMode -> {
+                        val uri = map.lightImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Light mode activé mais lightImageUri est null")
+                            hideLoader()
+                            return
+                        }
                     }
+                    map.hasDarkMode -> {
+                        val uri = map.darkImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "hasDarkMode=true mais darkImageUri est null")
+                            hideLoader()
+                            return
+                        }
+                    }
+                    map.hasLightMode -> {
+                        val uri = map.lightImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Carte a hasLightMode mais lightImageUri est null")
+                            hideLoader()
+                            return
+                        }
+                    }
+                    else -> {
+                        hideLoader()
+                        return
+                    }
+                }
+
+                mapView.setImage(imageSource)
+                mapView.setOnImageEventListener(initialMapLoadListener)
+                resetMapRotation()
+                if (minimapEnabled) {
+                    loadMinimapForCurrentMap()
                 }
             }
-
-            // Réinitialiser rotation
-            resetMapRotation()
+        } finally {
+            isLoadingMap = false
         }
-
-        mapView.postDelayed({ isLoadingMap = false }, 300)
     }
 
-    /**
-     * Réinitialise les transformations d'une vue
-     */
     private fun resetViewTransformations(view: SubsamplingScaleImageView) {
         view.rotation = 0f
         view.translationX = 0f
@@ -223,79 +464,71 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         view.requestLayout()
     }
 
-    /**
-     * Listener pour nouvelle carte : réinitialise tout
-     */
-    private fun setupMapListenerForNewMap(map: SubsamplingScaleImageView) {
-        map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
-            override fun onReady() {
-                map.post {
-                    adjustMapForRotation(map)
-                    // Zoom minimal et centrage au démarrage
-                    map.resetScaleAndCenter()
-                }
-            }
-            override fun onImageLoaded() {}
-            override fun onPreviewLoadError(e: Exception?) {}
-            override fun onTileLoadError(e: Exception?) {}
-            override fun onPreviewReleased() {}
-            override fun onImageLoadError(e: Exception?) {}
-        })
-    }
+    private fun calculateMinScaleWithPadding(map: SubsamplingScaleImageView): Float {
+        android.util.Log.d("MainActivity", "calculateMinScaleWithPadding appelée")
 
-    /**
-     * Listener pour changement light/dark : préserve l'état
-     */
-    private fun setupMapListenerForModeSwitch(map: SubsamplingScaleImageView, oldScale: Float, oldCenter: PointF?, oldRotation: Float) {
-        map.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
-            override fun onReady() {
-                map.post {
-                    // D'abord ajuster (si pas encore fait)
-                    if (map !in adjustedMaps) {
-                        adjustMapForRotation(map)
-                    }
-
-                    // Attendre que le pivot soit bien appliqué avant de restaurer
-                    map.postDelayed({
-                        if (oldCenter != null) {
-                            map.setScaleAndCenter(oldScale, oldCenter)
-                            map.rotation = oldRotation
-                        }
-                    }, 50) // Petit délai pour garantir que le pivot est appliqué
-                }
-            }
-            override fun onImageLoaded() {}
-            override fun onPreviewLoadError(e: Exception?) {}
-            override fun onTileLoadError(e: Exception?) {}
-            override fun onPreviewReleased() {}
-            override fun onImageLoadError(e: Exception?) {}
-        })
-    }
-
-    /**
-     * Ajuste la carte pour la rotation : ajoute du padding et définit le pivot au centre de l'écran
-     */
-    private fun adjustMapForRotation(map: SubsamplingScaleImageView) {
-        if (map.width == 0 || map.height == 0) {
-            map.postDelayed({ adjustMapForRotation(map) }, 50)
-            return
-        }
-
-        if (map in adjustedMaps) return
-
-        // Calculer le padding nécessaire pour couvrir l'écran en rotation
         val screenWidth = containerFrame.width
         val screenHeight = containerFrame.height
         val screenDiagonal = kotlin.math.hypot(screenWidth.toFloat(), screenHeight.toFloat())
 
-        // L'image doit faire au moins la diagonale de l'écran
+        val sourceImageWidth = map.sWidth.toFloat()
+        val sourceImageHeight = map.sHeight.toFloat()
+
+        android.util.Log.d("MainActivity", "Écran: ${screenWidth}×${screenHeight}, Image: ${sourceImageWidth}×${sourceImageHeight}")
+
+        val minScreenDimension = minOf(screenWidth, screenHeight).toFloat()
+
+        val paddingNeeded = ((screenDiagonal - minScreenDimension) / 2f * 1.1f).toInt()
+
+        android.util.Log.d("MainActivity", "Diagonal: $screenDiagonal, Padding estimé: $paddingNeeded")
+
+        val estimatedViewWidth = screenWidth + paddingNeeded * 2
+
+        val paddingRatio = screenWidth.toFloat() / estimatedViewWidth.toFloat()
+
+        val baseMinScaleWidth = screenWidth.toFloat() / sourceImageWidth
+        val baseMinScaleHeight = screenHeight.toFloat() / sourceImageHeight
+        val baseMinScale = minOf(baseMinScaleWidth, baseMinScaleHeight)
+
+        val adjustmentFactor = 2.5f
+
+        val correctedMinScale = baseMinScale * paddingRatio * adjustmentFactor
+
+        android.util.Log.d("MainActivity", "minScale calculé: $correctedMinScale (base=$baseMinScale, ratio=$paddingRatio, ajustement=$adjustmentFactor, padding=$paddingNeeded)")
+
+        return correctedMinScale
+    }
+    private fun adjustMapForRotation(map: SubsamplingScaleImageView) {
+        if (map.width == 0 || map.height == 0) {
+            if (adjustMapRetryCount >= maxAdjustRetries) {
+                android.util.Log.e("MainActivity", "adjustMapForRotation: Échec après $maxAdjustRetries tentatives")
+                adjustMapRetryCount = 0
+                return
+            }
+            adjustMapRetryCount++
+            android.util.Log.d("MainActivity", "adjustMapForRotation: retry $adjustMapRetryCount/$maxAdjustRetries")
+            map.postDelayed({ adjustMapForRotation(map) }, 50)
+            return
+        }
+
+        adjustMapRetryCount = 0  // Reset du compteur après succès
+
+        if (isMapAdjusted) {
+            android.util.Log.d("MainActivity", "adjustMapForRotation: déjà ajusté, skip")
+            return
+        }
+
+        val screenWidth = containerFrame.width
+        val screenHeight = containerFrame.height
+        val screenDiagonal = kotlin.math.hypot(screenWidth.toFloat(), screenHeight.toFloat())
+
         val imageWidth = map.width
         val imageHeight = map.height
-        val imageDiagonal = kotlin.math.hypot(imageWidth.toFloat(), imageHeight.toFloat())
 
         val paddingNeeded = ((screenDiagonal - minOf(imageWidth, imageHeight)) / 2f * 1.1f).toInt()
 
-        // Appliquer le padding
+        android.util.Log.d("MainActivity", "adjustMapForRotation: écran=${screenWidth}x${screenHeight}, image=${imageWidth}x${imageHeight}, padding=${paddingNeeded}")
+
         val params = FrameLayout.LayoutParams(
             imageWidth + paddingNeeded * 2,
             imageHeight + paddingNeeded * 2
@@ -303,17 +536,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map.layoutParams = params
         map.requestLayout()
 
-        // Décaler pour centrer l'image originale
         map.translationX = -paddingNeeded.toFloat()
         map.translationY = -paddingNeeded.toFloat()
 
-        // IMPORTANT : Le pivot est au centre de l'ÉCRAN (pas de l'image paddée)
         map.post {
-            map.pivotX = (imageWidth + paddingNeeded * 2) / 2f
-            map.pivotY = (imageHeight + paddingNeeded * 2) / 2f
+            val pivotX = (imageWidth + paddingNeeded * 2) / 2f
+            val pivotY = (imageHeight + paddingNeeded * 2) / 2f
+            map.pivotX = pivotX
+            map.pivotY = pivotY
+            android.util.Log.d("MainActivity", "adjustMapForRotation: pivot défini à (${pivotX}, ${pivotY})")
         }
 
-        adjustedMaps.add(map)
+        isMapAdjusted = true
+        android.util.Log.d("MainActivity", "adjustMapForRotation: TERMINE, isMapAdjusted=true")
     }
 
     private fun setupRotationTouch(map: AccessibleSubsamplingImageView) {
@@ -327,76 +562,275 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun setupMapView(map: SubsamplingScaleImageView) {
-        map.isPanEnabled = true
-        map.isZoomEnabled = true
-        map.setPanLimit(SubsamplingScaleImageView.PAN_LIMIT_OUTSIDE)
-    }
-
-    private fun setMapDarkMode(enabled: Boolean) {
-        if (enabled == darkModeEnabled || isLoadingMap) return
-        isLoadingMap = true
-        darkModeEnabled = enabled
-
-        // Sauvegarder l'état actuel
-        val oldScale = mapView.scale
-        val oldCenter = mapView.center?.let { PointF(it.x, it.y) }
-        val oldRotation = mapView.rotation
-
-        // Déterminer quelle vue utiliser
-        val newMapView = if (enabled) mapViewDark else mapViewLight
-
-        // Vérifier si on doit changer de vue
-        val shouldSwitchView = if (currentMap?.isBuiltIn == true) {
-            // Carte embarquée : toujours les deux vues
-            true
-        } else {
-            // Carte externe : seulement si les deux modes existent
-            currentMap?.hasLightMode == true && currentMap?.hasDarkMode == true
+        // Configuration de base
+        map.apply {
+            isPanEnabled = true
+            isZoomEnabled = true
+            setPanLimit(SubsamplingScaleImageView.PAN_LIMIT_OUTSIDE)
+            setMinimumScaleType(SubsamplingScaleImageView.SCALE_TYPE_CENTER_CROP)
+            setTileBackgroundColor(android.graphics.Color.TRANSPARENT)
         }
 
-        if (shouldSwitchView) {
-            // Changer la visibilité
-            mapViewLight.visibility = if (enabled) View.GONE else View.VISIBLE
-            mapViewDark.visibility = if (enabled) View.VISIBLE else View.GONE
-            mapView = newMapView
-
-            // Si la nouvelle vue est déjà prête et ajustée
-            if (newMapView.isReady && newMapView in adjustedMaps) {
-                newMapView.post {
-                    // Forcer le recalcul du pivot au cas où
-                    val padding = if (newMapView.width > 0 && newMapView.height > 0) {
-                        val screenWidth = containerFrame.width
-                        val screenHeight = containerFrame.height
-                        val screenDiagonal = kotlin.math.hypot(screenWidth.toFloat(), screenHeight.toFloat())
-                        val imageWidth = newMapView.width
-                        val imageHeight = newMapView.height
-                        ((screenDiagonal - minOf(imageWidth, imageHeight)) / 2f * 1.1f).toInt()
-                    } else {
-                        0
-                    }
-
-                    if (padding > 0) {
-                        newMapView.pivotX = (newMapView.width + padding * 2) / 2f
-                        newMapView.pivotY = (newMapView.height + padding * 2) / 2f
-                    }
-
-                    // Restaurer l'état après recalcul du pivot
-                    newMapView.postDelayed({
-                        if (oldCenter != null) {
-                            newMapView.setScaleAndCenter(oldScale, oldCenter)
-                            newMapView.rotation = oldRotation
-                        }
-                        isLoadingMap = false
-                    }, 50)
-                }
-            } else {
-                // Sinon, attendre qu'elle soit prête
-                setupMapListenerForModeSwitch(newMapView, oldScale, oldCenter, oldRotation)
-                isLoadingMap = false
+        setupMapExecutor(map)
+        map.setOnStateChangedListener(object : SubsamplingScaleImageView.OnStateChangedListener {
+            override fun onScaleChanged(newScale: Float, origin: Int) {
+                minimapController?.updateViewport()
             }
+
+            override fun onCenterChanged(newCenter: PointF?, origin: Int) {
+                minimapController?.updateViewport()
+            }
+        })
+    }
+
+    /**
+     * Configure le pool de threads optimal pour le décodage des tuiles
+     */
+    private fun setupMapExecutor(map: SubsamplingScaleImageView) {
+        val cpuCount = Runtime.getRuntime().availableProcessors()
+        val threadCount = minOf(cpuCount - 1, 4).coerceAtLeast(2)
+
+        android.util.Log.d("MainActivity", "CPU cores: $cpuCount → Using $threadCount decoder threads")
+
+        mapExecutor = Executors.newFixedThreadPool(threadCount) { runnable ->
+            Thread(runnable).apply {
+                priority = Thread.NORM_PRIORITY + 1
+            }
+        }
+
+        map.setExecutor(mapExecutor as Executor)
+    }
+
+    /**
+     * Configure la minimap avec taille proportionnelle à l'écran
+     */
+    private fun setupMinimap() {
+        val minimapView = findViewById<MinimapView>(R.id.minimapView)
+
+        // 🆕 Calculer la taille proportionnelle à l'écran (18%)
+        val screenWidth = resources.displayMetrics.widthPixels
+        val minimapSize = (screenWidth * MINIMAP_SCREEN_PERCENT).toInt()
+
+        // Appliquer la taille calculée
+        val params = minimapView.layoutParams as FrameLayout.LayoutParams
+        params.width = minimapSize
+        params.height = minimapSize
+        minimapView.layoutParams = params
+
+        android.util.Log.d("MainActivity", "Minimap size: ${minimapSize}px (${(MINIMAP_SCREEN_PERCENT * 100).toInt()}% écran)")
+
+        // Charger la préférence
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        minimapEnabled = prefs.getBoolean("minimap_enabled", false)
+
+        // Initialiser le contrôleur
+        minimapController = MinimapController(
+            context = this,
+            minimapView = minimapView,
+            mainMapView = mapView
+        )
+
+        // Appliquer l'état initial
+        updateMinimapVisibility()
+    }
+
+    /**
+     * Met à jour la visibilité de la minimap
+     */
+    private fun updateMinimapVisibility() {
+        minimapController?.setEnabled(minimapEnabled)
+
+        if (minimapEnabled) {
+            loadMinimapForCurrentMap()
+        }
+    }
+
+    /**
+     * Charge la minimap pour la carte actuelle
+     */
+    private fun loadMinimapForCurrentMap() {
+        val map = currentMap ?: return
+
+        // Déterminer quelle minimap charger (light ou dark)
+        val minimapUri = if (darkModeEnabled) {
+            map.darkMinimapUri
         } else {
-            // Une seule image : rien à faire
-            isLoadingMap = false
+            map.lightMinimapUri
+        }
+
+        // Si la minimap n'existe pas et que ce n'est pas une carte built-in
+        if (minimapUri == null && !map.isBuiltIn) {
+            // Générer la minimap à la volée
+            generateMinimapOnDemand(map)
+        } else {
+            // Charger la minimap existante
+            minimapController?.loadMinimapImage(minimapUri)
+        }
+    }
+
+    /**
+     * Génère la minimap à la volée pour les cartes qui n'en ont pas
+     */
+    private fun generateMinimapOnDemand(map: MapItem) {
+        lifecycleScope.launch {
+            try {
+                android.util.Log.d("MainActivity", "Génération minimap à la volée pour ${map.name}")
+
+                // Générer les deux minimap
+                val lightMinimapUri = map.lightImageUri?.let { uri ->
+                    withContext(Dispatchers.IO) {
+                        MinimapGenerator.generateMinimap(this@MainActivity, uri)
+                    }
+                }
+
+                val darkMinimapUri = map.darkImageUri?.let { uri ->
+                    withContext(Dispatchers.IO) {
+                        MinimapGenerator.generateMinimap(this@MainActivity, uri)
+                    }
+                }
+
+                // Sauvegarder dans la base
+                if (lightMinimapUri != null || darkMinimapUri != null) {
+                    map.lightMinimapUri = lightMinimapUri
+                    map.darkMinimapUri = darkMinimapUri
+                    database.addOrUpdateMap(map)
+                    storage.save(database)
+
+                    android.util.Log.d("MainActivity", "Minimap générée et sauvegardée")
+
+                    // Recharger la minimap
+                    loadMinimapForCurrentMap()
+                }
+
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Erreur génération minimap à la volée", e)
+            }
+        }
+    }
+
+    private fun showLoader() {
+        loadingOverlay.visibility = View.VISIBLE
+        loadingOverlay.alpha = 1f
+    }
+
+    private fun hideLoader() {
+        loadingOverlay.animate()
+            .alpha(0f)
+            .setDuration(100)
+            .withEndAction {
+                loadingOverlay.visibility = View.GONE
+            }
+            .start()
+    }
+    private fun setMapDarkMode(enabled: Boolean) {
+        android.util.Log.d("MainActivity", "setMapDarkMode: début, enabled=${enabled}, darkModeEnabled=${darkModeEnabled}, isLoadingMap=${isLoadingMap}")
+
+        // Protection renforcée avec synchronisation
+        synchronized(this) {
+            if (enabled == darkModeEnabled || isLoadingMap) return
+            isLoadingMap = true
+        }
+
+        showLoader()
+
+        val currentMapItem = currentMap ?: run {
+            synchronized(this) { isLoadingMap = false }  // ← CORRECTION : synchronized
+            hideLoader()
+            return
+        }
+
+        mapView.post {
+            try {
+                android.util.Log.d("MainActivity", "setMapDarkMode: dans post, avant isMapAdjusted=false")
+                isMapAdjusted = false
+                mapState.capture(mapView)
+
+                android.util.Log.d("MainActivity", "Changement de mode: ${if (enabled) "Light→Dark" else "Dark→Light"}")
+
+                resetViewTransformations(mapView)
+
+                val backgroundColor = if (enabled) {
+                    android.graphics.Color.BLACK
+                } else {
+                    android.graphics.Color.WHITE
+                }
+                mapView.setBackgroundColor(backgroundColor)
+
+                val newImageSource = when {
+                    currentMapItem.isBuiltIn -> {
+                        val drawableId = if (enabled) {
+                            R.drawable.exemple_2025_dark
+                        } else {
+                            R.drawable.exemple_2025_light
+                        }
+                        ImageSource.resource(drawableId)
+                    }
+                    enabled && currentMapItem.hasDarkMode -> {
+                        val uri = currentMapItem.darkImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Dark mode demandé mais darkImageUri est null")
+                            synchronized(this) { isLoadingMap = false }  // ← CORRECTION
+                            hideLoader()
+                            return@post
+                        }
+                    }
+                    !enabled && currentMapItem.hasLightMode -> {
+                        val uri = currentMapItem.lightImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "Light mode demandé mais lightImageUri est null")
+                            synchronized(this) { isLoadingMap = false }  // ← CORRECTION
+                            hideLoader()
+                            return@post
+                        }
+                    }
+                    currentMapItem.hasDarkMode -> {
+                        val uri = currentMapItem.darkImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "hasDarkMode=true mais darkImageUri est null")
+                            synchronized(this) { isLoadingMap = false }  // ← CORRECTION
+                            hideLoader()
+                            return@post
+                        }
+                    }
+                    currentMapItem.hasLightMode -> {
+                        val uri = currentMapItem.lightImageUri
+                        if (uri != null) {
+                            ImageSource.uri(uri)
+                        } else {
+                            android.util.Log.e("MainActivity", "hasLightMode=true mais lightImageUri est null")
+                            synchronized(this) { isLoadingMap = false }  // ← CORRECTION
+                            hideLoader()
+                            return@post
+                        }
+                    }
+                    else -> {
+                        android.util.Log.e("MainActivity", "Pas d'image disponible pour ce mode")
+                        synchronized(this) { isLoadingMap = false }  // ← CORRECTION
+                        hideLoader()
+                        return@post
+                    }
+                }
+
+                darkModeEnabled = enabled
+
+                mapView.setImage(newImageSource)
+
+                mapView.setOnImageEventListener(imageEventListener)
+                if (minimapEnabled) {
+                    loadMinimapForCurrentMap()
+                }
+
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Erreur setMapDarkMode", e)
+                synchronized(this) { isLoadingMap = false }
+                hideLoader()
+            }
         }
     }
 
@@ -405,6 +839,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager.unregisterListener(this)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+
+        // Cleanup dans un try-catch pour éviter crash sur cleanup
+        try {
+            sensorManager.unregisterListener(this)
+            mapExecutor?.shutdown()
+            mapView.setOnImageEventListener(null)
+            mapView.recycle()
+            minimapController = null
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Erreur cleanup", e)
+        } finally {
+            mapExecutor = null
+        }
+    }
     override fun onSensorChanged(event: SensorEvent) {
         val now = System.currentTimeMillis()
         if (now - lastSensorUpdateTime < sensorUpdateIntervalMs) return
@@ -423,18 +873,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         compassView.rotation = -azimuthFiltered
 
-        if (rotateWithCompass) rotateMapTo(-azimuthFiltered)
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-
-    private fun updateSensors() {
-        sensorManager.unregisterListener(this)
-        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
-        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        if (rotateWithCompass && now - lastMapRotationTime >= mapRotationIntervalMs) {
+            lastMapRotationTime = now
+            rotateMapTo(-azimuthFiltered)
         }
     }
 
@@ -446,143 +887,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         return current + delta * alpha
     }
 
-    private fun angleDifference(target: Float, current: Float): Float {
-        var diff = target - current
-        if (diff > 180) diff -= 360
-        if (diff < -180) diff += 360
-        return diff
+    private fun rotateMapTo(angle: Float) {
+        mapView.rotation = angle
+        minimapController?.updateRotation(angle)  // 🆕 AJOUTÉ
     }
 
-    private fun setSensorsEnabled(enabled: Boolean) {
-        sensorManager.unregisterListener(this)
-        if (!enabled) return
-
-        sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)?.also {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
-        sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)?.also {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-        }
-    }
-
-    private fun updateRotationAndCompass() {
-        if (batterySaverEnabled) {
-            rotateWithCompass = false
-            compassView.visibility = View.GONE
-            resetMapRotation()
-            setSensorsEnabled(false)
-        } else {
-            compassView.visibility = View.VISIBLE
-            setSensorsEnabled(true)
-
-            if (!rotateWithCompass) {
-                resetMapRotation()
-            }
-        }
-    }
-
-    private fun setupMenuButton() {
-        val menuButton = findViewById<ImageButton>(R.id.menuButton)
-        menuButton.setOnClickListener { view ->
-            val popup = PopupMenu(this, view)
-            popup.menuInflater.inflate(R.menu.main_menu, popup.menu)
-
-            popup.menu.findItem(R.id.action_rotate_with_compass).isChecked = rotateWithCompass
-            popup.menu.findItem(R.id.action_dark_mode).isChecked = darkModeEnabled
-            popup.menu.findItem(R.id.action_battery_saver).isChecked = batterySaverEnabled
-            popup.menu.findItem(R.id.action_manual_rotate).isChecked = manualRotateEnabled
-            popup.menu.findItem(R.id.action_reset_rotation).isVisible = manualRotateEnabled
-
-            popup.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    R.id.action_rotate_with_compass -> {
-                        rotateWithCompass = !item.isChecked
-                        item.isChecked = rotateWithCompass
-
-                        if (rotateWithCompass && manualRotateEnabled) {
-                            manualRotateEnabled = false
-                            popup.menu.findItem(R.id.action_manual_rotate).isChecked = false
-                        }
-
-                        updateRotationAndCompass()
-                        true
-                    }
-
-                    R.id.action_dark_mode -> {
-                        val newValue = !item.isChecked
-                        item.isChecked = newValue
-                        setMapDarkMode(newValue)
-                        true
-                    }
-
-                    R.id.action_manual_rotate -> {
-                        val wasEnabled = manualRotateEnabled
-                        manualRotateEnabled = !item.isChecked
-                        item.isChecked = manualRotateEnabled
-
-                        if (manualRotateEnabled && rotateWithCompass) {
-                            rotateWithCompass = false
-                            popup.menu.findItem(R.id.action_rotate_with_compass).isChecked = false
-                        }
-
-                        if (wasEnabled && !manualRotateEnabled) {
-                            resetMapRotation()
-                        }
-
-                        true
-                    }
-
-                    R.id.action_battery_saver -> {
-                        batterySaverEnabled = !item.isChecked
-                        item.isChecked = batterySaverEnabled
-
-                        if (batterySaverEnabled && rotateWithCompass) {
-                            rotateWithCompass = false
-                            popup.menu.findItem(R.id.action_rotate_with_compass).isChecked = false
-                        }
-
-                        updateRotationAndCompass()
-                        true
-                    }
-
-                    R.id.action_reset_rotation -> {
-                        if (manualRotateEnabled) {
-                            resetMapRotation()
-                        }
-                        true
-                    }
-
-                    R.id.action_manage_maps -> {
-                        startActivity(Intent(this, MapManagerActivity::class.java))
-                        true
-                    }
-
-                    else -> false
-                }
-            }
-            popup.show()
-        }
-    }
-
-    private fun rotateMapTo(targetRotation: Float) {
-        val now = System.currentTimeMillis()
-        if (now - lastMapRotationTime < mapRotationIntervalMs) return
-        lastMapRotationTime = now
-
-        val diff = angleDifference(targetRotation, mapView.rotation)
-        if (kotlin.math.abs(diff) < 0.5f) return
-
-        mapView.rotation += diff * 0.9f
-
-        if (isUserInteracting) {
-            mapView.postDelayed({ isUserInteracting = false }, 50)
-        }
-    }
-
-    private fun resetMapRotation() {
-        if (::mapView.isInitialized) {
-            mapView.rotation = 0f
-        }
-        compassView.rotation = 0f
-    }
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }

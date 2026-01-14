@@ -23,7 +23,8 @@
         <activity
             android:name=".MapManagerActivity"
             android:theme="@style/Theme.CataMap"
-            android:exported="false"/>
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"/>
     </application>
 
 </manifest>

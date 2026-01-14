@@ -45,6 +45,34 @@
         <item name="rippleColor">#78909C</item>
     </style>
 
-    <!-- Couleur du divider -->
+    <!-- Style des dialogues en mode sombre -->
+    <style name="Theme.CataMap.Dialog" parent="Theme.MaterialComponents.DayNight.Dialog.Alert">
+        <!-- Fond du dialogue -->
+        <item name="android:background">@color/dialog_background</item>
+        <item name="backgroundTint">@color/dialog_background</item>
+
+        <!-- Couleurs du texte -->
+        <item name="android:textColorPrimary">#E0E0E0</item>
+        <item name="android:textColorSecondary">#B0B0B0</item>
+        <item name="colorOnSurface">#E0E0E0</item>
+
+        <!-- Couleur de surface -->
+        <item name="colorSurface">#1E1E1E</item>
+
+        <!-- Boutons du dialogue -->
+        <item name="colorPrimary">#546E7A</item>
+        <item name="colorSecondary">#78909C</item>
+
+        <!-- Titre du dialogue -->
+        <item name="android:windowTitleStyle">@style/DialogTitle</item>
+    </style>
+
+    <!-- Style du titre de dialogue -->
+    <style name="DialogTitle" parent="TextAppearance.AppCompat.Title">
+        <item name="android:textColor">#E0E0E0</item>
+    </style>
+
+    <!-- Couleurs -->
     <color name="divider_dark">#2C2C2C</color>
+    <color name="dialog_background">#1E1E1E</color>
 </resources>
