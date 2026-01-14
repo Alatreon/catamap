@@ -20,7 +20,12 @@ import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import androidx.core.view.isVisible
+import kotlinx.coroutines.Dispatchers
 import java.util.concurrent.Executor
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -53,6 +58,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var mapExecutor: ExecutorService? = null
     private var adjustMapRetryCount = 0
     private val maxAdjustRetries = 20
+    private val MINIMAP_SCREEN_PERCENT = 0.40f  // 18% de la largeur écran
+    private var minimapController: MinimapController? = null
+    private var minimapEnabled = false
 
     private val imageEventListener = object : SubsamplingScaleImageView.OnImageEventListener {
         override fun onReady() {
@@ -72,7 +80,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 mapView.postDelayed({
                     mapState.apply(mapView)
                     isLoadingMap = false
-
+                    minimapController?.updateViewport()
                     hideLoader()
 
                     android.util.Log.d("MainActivity", "Image prête avec état préservé")
@@ -119,6 +127,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         mapView.setScaleAndCenter(calculatedMinScale, center)
                         android.util.Log.d("MainActivity", "Carte centrée à $center avec scale $calculatedMinScale")
 
+                        minimapController?.updateViewport()
                         hideLoader()
                     }, 50)
                 } else {
@@ -163,6 +172,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         setupWindowInsets()
         setupMapView(mapView)
+        setupMinimap()
 
         val selectedMapId = intent.getStringExtra(EXTRA_SELECTED_MAP_ID)
         currentMap = if (selectedMapId != null) {
@@ -274,7 +284,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         popup.menu.findItem(R.id.menu_rotate_compass)?.isChecked = rotateWithCompass
         popup.menu.findItem(R.id.menu_rotate_manual)?.isChecked = manualRotateEnabled
         popup.menu.findItem(R.id.menu_battery_saver)?.isChecked = batterySaverEnabled
-
+        popup.menu.findItem(R.id.menu_minimap)?.isChecked = minimapEnabled
         popup.menu.findItem(R.id.menu_reset_rotation)?.isVisible = manualRotateEnabled
 
         popup.setOnMenuItemClickListener { item ->
@@ -314,6 +324,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     batterySaverEnabled = !batterySaverEnabled
                     item.isChecked = batterySaverEnabled
                     updateRotationAndCompass()
+                    true
+                }
+                R.id.menu_minimap -> {
+                    minimapEnabled = !minimapEnabled
+                    item.isChecked = minimapEnabled
+
+                    // Sauvegarder la préférence
+                    getSharedPreferences("settings", MODE_PRIVATE).edit().apply {
+                        putBoolean("minimap_enabled", minimapEnabled)
+                        apply()
+                    }
+
+                    updateMinimapVisibility()
                     true
                 }
                 R.id.menu_reset_rotation -> {
@@ -421,6 +444,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 mapView.setImage(imageSource)
                 mapView.setOnImageEventListener(initialMapLoadListener)
                 resetMapRotation()
+                if (minimapEnabled) {
+                    loadMinimapForCurrentMap()
+                }
             }
         } finally {
             isLoadingMap = false
@@ -546,6 +572,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         setupMapExecutor(map)
+        map.setOnStateChangedListener(object : SubsamplingScaleImageView.OnStateChangedListener {
+            override fun onScaleChanged(newScale: Float, origin: Int) {
+                minimapController?.updateViewport()
+            }
+
+            override fun onCenterChanged(newCenter: PointF?, origin: Int) {
+                minimapController?.updateViewport()
+            }
+        })
     }
 
     /**
@@ -564,6 +599,113 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         map.setExecutor(mapExecutor as Executor)
+    }
+
+    /**
+     * Configure la minimap avec taille proportionnelle à l'écran
+     */
+    private fun setupMinimap() {
+        val minimapView = findViewById<MinimapView>(R.id.minimapView)
+
+        // 🆕 Calculer la taille proportionnelle à l'écran (18%)
+        val screenWidth = resources.displayMetrics.widthPixels
+        val minimapSize = (screenWidth * MINIMAP_SCREEN_PERCENT).toInt()
+
+        // Appliquer la taille calculée
+        val params = minimapView.layoutParams as FrameLayout.LayoutParams
+        params.width = minimapSize
+        params.height = minimapSize
+        minimapView.layoutParams = params
+
+        android.util.Log.d("MainActivity", "Minimap size: ${minimapSize}px (${(MINIMAP_SCREEN_PERCENT * 100).toInt()}% écran)")
+
+        // Charger la préférence
+        val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+        minimapEnabled = prefs.getBoolean("minimap_enabled", false)
+
+        // Initialiser le contrôleur
+        minimapController = MinimapController(
+            context = this,
+            minimapView = minimapView,
+            mainMapView = mapView
+        )
+
+        // Appliquer l'état initial
+        updateMinimapVisibility()
+    }
+
+    /**
+     * Met à jour la visibilité de la minimap
+     */
+    private fun updateMinimapVisibility() {
+        minimapController?.setEnabled(minimapEnabled)
+
+        if (minimapEnabled) {
+            loadMinimapForCurrentMap()
+        }
+    }
+
+    /**
+     * Charge la minimap pour la carte actuelle
+     */
+    private fun loadMinimapForCurrentMap() {
+        val map = currentMap ?: return
+
+        // Déterminer quelle minimap charger (light ou dark)
+        val minimapUri = if (darkModeEnabled) {
+            map.darkMinimapUri
+        } else {
+            map.lightMinimapUri
+        }
+
+        // Si la minimap n'existe pas et que ce n'est pas une carte built-in
+        if (minimapUri == null && !map.isBuiltIn) {
+            // Générer la minimap à la volée
+            generateMinimapOnDemand(map)
+        } else {
+            // Charger la minimap existante
+            minimapController?.loadMinimapImage(minimapUri)
+        }
+    }
+
+    /**
+     * Génère la minimap à la volée pour les cartes qui n'en ont pas
+     */
+    private fun generateMinimapOnDemand(map: MapItem) {
+        lifecycleScope.launch {
+            try {
+                android.util.Log.d("MainActivity", "Génération minimap à la volée pour ${map.name}")
+
+                // Générer les deux minimap
+                val lightMinimapUri = map.lightImageUri?.let { uri ->
+                    withContext(Dispatchers.IO) {
+                        MinimapGenerator.generateMinimap(this@MainActivity, uri)
+                    }
+                }
+
+                val darkMinimapUri = map.darkImageUri?.let { uri ->
+                    withContext(Dispatchers.IO) {
+                        MinimapGenerator.generateMinimap(this@MainActivity, uri)
+                    }
+                }
+
+                // Sauvegarder dans la base
+                if (lightMinimapUri != null || darkMinimapUri != null) {
+                    map.lightMinimapUri = lightMinimapUri
+                    map.darkMinimapUri = darkMinimapUri
+                    database.addOrUpdateMap(map)
+                    storage.save(database)
+
+                    android.util.Log.d("MainActivity", "Minimap générée et sauvegardée")
+
+                    // Recharger la minimap
+                    loadMinimapForCurrentMap()
+                }
+
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Erreur génération minimap à la volée", e)
+            }
+        }
     }
 
     private fun showLoader() {
@@ -598,7 +740,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         mapView.post {
-            try {  // ← AJOUT : try-catch pour garantir le cleanup
+            try {
                 android.util.Log.d("MainActivity", "setMapDarkMode: dans post, avant isMapAdjusted=false")
                 isMapAdjusted = false
                 mapState.capture(mapView)
@@ -680,8 +822,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 mapView.setImage(newImageSource)
 
                 mapView.setOnImageEventListener(imageEventListener)
+                if (minimapEnabled) {
+                    loadMinimapForCurrentMap()
+                }
 
-            } catch (e: Exception) {  // ← AJOUT : catch pour garantir le cleanup
+            } catch (e: Exception) {
                 android.util.Log.e("MainActivity", "Erreur setMapDarkMode", e)
                 synchronized(this) { isLoadingMap = false }
                 hideLoader()
@@ -703,6 +848,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mapExecutor?.shutdown()
             mapView.setOnImageEventListener(null)
             mapView.recycle()
+            minimapController = null
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "Erreur cleanup", e)
         } finally {
@@ -743,6 +889,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun rotateMapTo(angle: Float) {
         mapView.rotation = angle
+        minimapController?.updateRotation(angle)  // 🆕 AJOUTÉ
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}

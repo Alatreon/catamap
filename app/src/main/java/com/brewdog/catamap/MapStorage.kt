@@ -12,6 +12,7 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
+import com.google.gson.annotations.SerializedName
 import java.lang.reflect.Type
 
 /**
@@ -66,7 +67,9 @@ class MapStorage(context: Context) {
             isDefault = true,
             hasLightMode = true,
             hasDarkMode = true,
-            isBuiltIn = true // Carte embarquée
+            isBuiltIn = true, // Carte embarquée
+            lightMinimapUri = null,
+            darkMinimapUri = null
         )
 
         database.addOrUpdateMap(exampleMap)

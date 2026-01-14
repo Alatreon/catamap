@@ -15,7 +15,9 @@ data class MapItem(
     var isDefault: Boolean = false,    // Carte par défaut
     var hasLightMode: Boolean = false, // Disponibilité mode light
     var hasDarkMode: Boolean = false,  // Disponibilité mode dark
-    val isBuiltIn: Boolean = false     // true si c'est une carte embarquée (non supprimable tant que par défaut)
+    val isBuiltIn: Boolean = false,     // true si c'est une carte embarquée (non supprimable tant que par défaut)
+    var lightMinimapUri: Uri?,         // URI de la minimap light
+    var darkMinimapUri: Uri?          // URI de la minimap dark
 )
 
 /**

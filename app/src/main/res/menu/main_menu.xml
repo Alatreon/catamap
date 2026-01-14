@@ -15,6 +15,10 @@
         android:title="@string/conomie_de_batterie"
         android:checkable="true" />
     <item
+        android:id="@+id/menu_minimap"
+        android:title="@string/minimap"
+        android:checkable="true"/>
+    <item
         android:id="@+id/menu_rotate_manual"
         android:title="@string/rotation_manuelle"
         android:checkable="true"

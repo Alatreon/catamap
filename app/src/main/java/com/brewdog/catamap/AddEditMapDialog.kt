@@ -25,7 +25,8 @@ class AddEditMapDialog : DialogFragment() {
     private var onDeleteListener: (() -> Unit)? = null
     private var selectedLightUri: Uri? = null
     private var selectedDarkUri: Uri? = null
-
+    private var selectedLightMinimapUri: Uri? = null
+    private var selectedDarkMinimapUri: Uri? = null
     private lateinit var editMapName: TextInputEditText
     private lateinit var spinnerCategory: Spinner
     private lateinit var textDateAdded: TextView
@@ -102,10 +103,10 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     private fun processImage(uri: Uri) {
-        // CORRECTION 3: Annuler le job précédent s'il existe
+        // Annuler le job précédent s'il existe
         imageProcessingJob?.cancel()
 
-        // CORRECTION 3: Stocker le nouveau job
+        // Stocker le nouveau job
         imageProcessingJob = lifecycleScope.launch {
             try {
                 // Vérifier dès le début si le fragment est attaché
@@ -127,24 +128,53 @@ class AddEditMapDialog : DialogFragment() {
                 // Vérifier à nouveau après l'opération IO
                 if (!isAdded) return@launch
 
-                // Mise à jour UI - phase 2: Génération
+                // Mise à jour UI - phase 2: Génération version alternative
                 withContext(Dispatchers.Main) {
-                    textImageStatus.text = "Generation..."
+                    textImageStatus.text = "Generation version alternative..."
                 }
 
-                // Génération en background
+                // Génération version alternative en background
                 val negativeUri = withContext(Dispatchers.IO) {
                     MapImageConverter.generateAlternateVersionOptimized(
                         requireContext(), uri, MapImageConverter.ConversionMode.INVERT
                     )
                 }
 
+                // Vérifier une nouvelle fois
+                if (!isAdded) return@launch
+
+                // 🆕 Mise à jour UI - phase 3: Génération minimap light
+                withContext(Dispatchers.Main) {
+                    textImageStatus.text = "Generation minimap light..."
+                }
+
+                val lightUri = if (isDark) negativeUri else uri
+                val lightMinimapUri = if (lightUri != null) {
+                    withContext(Dispatchers.IO) {
+                        MinimapGenerator.generateMinimap(requireContext(), lightUri)
+                    }
+                } else null
+
+                if (!isAdded) return@launch
+
+                // 🆕 Mise à jour UI - phase 4: Génération minimap dark
+                withContext(Dispatchers.Main) {
+                    textImageStatus.text = "Generation minimap dark..."
+                }
+
+                val darkUri = if (isDark) uri else negativeUri
+                val darkMinimapUri = if (darkUri != null) {
+                    withContext(Dispatchers.IO) {
+                        MinimapGenerator.generateMinimap(requireContext(), darkUri)
+                    }
+                } else null
+
                 // Vérifier une dernière fois avant de finaliser
                 if (!isAdded) return@launch
 
                 // Mise à jour UI finale
                 withContext(Dispatchers.Main) {
-                    if (negativeUri != null) {
+                    if (negativeUri != null && lightMinimapUri != null && darkMinimapUri != null) {
                         if (isDark) {
                             selectedDarkUri = uri
                             selectedLightUri = negativeUri
@@ -152,7 +182,12 @@ class AddEditMapDialog : DialogFragment() {
                             selectedLightUri = uri
                             selectedDarkUri = negativeUri
                         }
-                        textImageStatus.text = "Les deux versions pretes"
+
+                        // 🆕 Stocker les minimap
+                        selectedLightMinimapUri = lightMinimapUri
+                        selectedDarkMinimapUri = darkMinimapUri
+
+                        textImageStatus.text = "Carte et minimap pretes !"
                         Toast.makeText(requireContext(), "Carte prete !", Toast.LENGTH_SHORT).show()
                     } else {
                         throw Exception("Erreur generation")
@@ -160,9 +195,8 @@ class AddEditMapDialog : DialogFragment() {
                 }
 
             } catch (e: CancellationException) {
-                // CORRECTION 3: Gestion normale de l'annulation
+                // Gestion normale de l'annulation
                 android.util.Log.d("AddEditMapDialog", "Traitement image annulé")
-                // Ne pas afficher d'erreur, c'est une annulation normale
 
             } catch (e: Exception) {
                 // Gestion des autres erreurs
@@ -186,6 +220,7 @@ class AddEditMapDialog : DialogFragment() {
         }
     }
 
+
     private fun populateFields() {
         val storage = MapStorage(requireContext())
         val database = storage.load()
@@ -201,6 +236,8 @@ class AddEditMapDialog : DialogFragment() {
                 checkDefaultMap.isChecked = map.isDefault
                 selectedLightUri = map.lightImageUri
                 selectedDarkUri = map.darkImageUri
+                selectedLightMinimapUri = map.lightMinimapUri
+                selectedDarkMinimapUri = map.darkMinimapUri
                 textImageStatus.text = if (map.lightImageUri != null || map.darkImageUri != null) "Image presente" else "Aucune image"
                 val category = database.categories.find { it.id == map.categoryId }
                 spinnerCategory.setSelection(categoryNames.indexOf(category?.name).coerceAtLeast(0))
@@ -235,7 +272,9 @@ class AddEditMapDialog : DialogFragment() {
             isDefault = checkDefaultMap.isChecked,
             hasLightMode = selectedLightUri != null,
             hasDarkMode = selectedDarkUri != null,
-            isBuiltIn = false
+            isBuiltIn = false,
+            lightMinimapUri = selectedLightMinimapUri,
+            darkMinimapUri = selectedDarkMinimapUri
         )
         onSaveListener?.invoke(map)
         dismiss()
