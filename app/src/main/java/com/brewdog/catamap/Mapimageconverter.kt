@@ -21,8 +21,7 @@ object MapImageConverter {
      */
     suspend fun generateAlternateVersionOptimized(
         context: Context,
-        sourceUri: Uri,
-        mode: ConversionMode
+        sourceUri: Uri
     ): Uri? = withContext(Dispatchers.IO) {
         var sourceBitmap: Bitmap? = null
         var transformedBitmap: Bitmap? = null

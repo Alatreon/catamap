@@ -35,7 +35,7 @@ class MapState {
     /**
      * Applique l'état sauvegardé à la carte
      */
-    fun apply(mapView: SubsamplingScaleImageView, animated: Boolean = false) {
+    fun apply(mapView: SubsamplingScaleImageView) {
         val state = savedState ?: return
 
         if (!mapView.isReady) {
@@ -48,17 +48,4 @@ class MapState {
 
         android.util.Log.d("MapState", "État appliqué: scale=${state.scale}, center=${state.center}, rotation=${state.rotation}")
     }
-
-    /**
-     * Reset l'état sauvegardé
-     */
-    fun reset() {
-        savedState = null
-        android.util.Log.d("MapState", "État réinitialisé")
-    }
-
-    /**
-     * Vérifie si un état est sauvegardé
-     */
-    fun hasSavedState(): Boolean = savedState != null
 }

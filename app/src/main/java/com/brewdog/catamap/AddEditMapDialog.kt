@@ -136,8 +136,7 @@ class AddEditMapDialog : DialogFragment() {
                 // Génération version alternative en background
                 val negativeUri = withContext(Dispatchers.IO) {
                     MapImageConverter.generateAlternateVersionOptimized(
-                        requireContext(), uri, MapImageConverter.ConversionMode.INVERT
-                    )
+                        requireContext(), uri                    )
                 }
 
                 // Vérifier une nouvelle fois
@@ -183,7 +182,7 @@ class AddEditMapDialog : DialogFragment() {
                             selectedDarkUri = negativeUri
                         }
 
-                        // 🆕 Stocker les minimap
+                        // Stocker les minimap
                         selectedLightMinimapUri = lightMinimapUri
                         selectedDarkMinimapUri = darkMinimapUri
 

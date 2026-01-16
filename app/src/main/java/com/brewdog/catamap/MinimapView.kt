@@ -6,7 +6,6 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.widget.FrameLayout
 import android.widget.ImageView
-import androidx.core.content.ContextCompat
 
 /**
  * Vue personnalisée pour afficher la minimap avec viewport
@@ -17,29 +16,25 @@ class MinimapView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    // ⚙️ PARAMÈTRES CONFIGURABLES
     companion object {
-        private const val VIEWPORT_STROKE_WIDTH_DP = 2f     // Épaisseur du cadre
-        private const val VIEWPORT_CORNER_RADIUS_DP = 0f    // Coins arrondis (0 = carrés)
-        private val VIEWPORT_COLOR = Color.RED              // Couleur du cadre
+        private const val VIEWPORT_STROKE_WIDTH_DP = 1f     // Épaisseur du cadre
+        private const val VIEWPORT_COLOR = Color.RED              // Couleur du cadre
     }
 
-    // Vues internes
-    private val imageView: ImageView
+    // ImageView pour afficher la minimap
+    private val imageView: ImageView = ImageView(context).apply {
+        scaleType = ImageView.ScaleType.FIT_XY  // 🔧 CHANGÉ de FIT_CENTER à FIT_XY
+        layoutParams = LayoutParams(
+            LayoutParams.MATCH_PARENT,
+            LayoutParams.MATCH_PARENT
+        )
+    }
     private val viewportOverlay: ViewportOverlay
 
     // Callbacks
     var onViewportDragged: ((Float, Float) -> Unit)? = null
 
     init {
-        // ImageView pour afficher la minimap
-        imageView = ImageView(context).apply {
-            scaleType = ImageView.ScaleType.FIT_XY  // 🔧 CHANGÉ de FIT_CENTER à FIT_XY
-            layoutParams = LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                LayoutParams.MATCH_PARENT
-            )
-        }
         addView(imageView)
 
         // Overlay pour dessiner le viewport
@@ -54,7 +49,7 @@ class MinimapView @JvmOverloads constructor(
         // Fond semi-transparent
         setBackgroundColor(Color.argb(200, 0, 0, 0))
 
-        // 🆕 Forcer une taille minimale
+        // Forcer une taille minimale
         minimumWidth = (120 * resources.displayMetrics.density).toInt()
         minimumHeight = (120 * resources.displayMetrics.density).toInt()
     }
@@ -68,13 +63,6 @@ class MinimapView @JvmOverloads constructor(
         } else {
             imageView.setImageDrawable(null)
         }
-    }
-
-    /**
-     * Définit la rotation de la minimap
-     */
-    fun setMinimapRotation(degrees: Float) {
-        imageView.rotation = degrees
     }
 
     /**
@@ -130,8 +118,6 @@ class MinimapView @JvmOverloads constructor(
             strokeWidth = VIEWPORT_STROKE_WIDTH_DP * resources.displayMetrics.density
             isAntiAlias = true
         }
-        private val path = Path()
-
         var isDragging = false
         var lastTouchX = 0f
         var lastTouchY = 0f
@@ -151,16 +137,7 @@ class MinimapView @JvmOverloads constructor(
             val vp = viewport ?: return
 
             // Dessiner le quadrilatère du viewport
-            if (VIEWPORT_CORNER_RADIUS_DP > 0) {
-                // Coins arrondis
-                val rect = RectF(vp)
-                val cornerRadius = VIEWPORT_CORNER_RADIUS_DP * resources.displayMetrics.density
-                canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
-            } else {
-                // Coins carrés (rectangle simple pour l'instant)
-                // TODO: Implémenter le quadrilatère exact avec rotation
-                canvas.drawRect(vp, paint)
-            }
+            canvas.drawRect(vp, paint)
         }
     }
 }

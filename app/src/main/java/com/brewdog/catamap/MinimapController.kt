@@ -1,6 +1,5 @@
 package com.brewdog.catamap
 
-import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
 import android.net.Uri
@@ -12,12 +11,11 @@ import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
  * Gère la synchronisation entre la carte principale et la minimap
  */
 class MinimapController(
-    private val context: Context,
     private val minimapView: MinimapView,
     private val mainMapView: SubsamplingScaleImageView
 ) {
 
-    // ⚙️ PARAMÈTRES CONFIGURABLES
+    // PARAMÈTRES CONFIGURABLES
     companion object {
         private const val UPDATE_THROTTLE_MS = 66L  // ~15fps
     }
@@ -55,31 +53,23 @@ class MinimapController(
     fun loadMinimapImage(uri: Uri?) {
         minimapView.setMinimapImage(uri)
 
-        // Obtenir les dimensions de la minimap
+        // Obtenir les dimensions de la minimap après chargement
         minimapView.post {
             minimapWidth = minimapView.width
             minimapHeight = minimapView.height
 
             android.util.Log.d("MinimapController", "Minimap dimensions: ${minimapWidth}x${minimapHeight}")
 
-            // 🆕 Forcer une mise à jour immédiate
-            mainMapView.post {
+            // 🔧 FIX : Attendre que l'image soit vraiment chargée
+            minimapView.postDelayed({
                 if (mainMapView.isReady) {
                     currentMapWidth = mainMapView.sWidth
                     currentMapHeight = mainMapView.sHeight
                     updateViewport()
+                    android.util.Log.d("MinimapController", "Viewport updated after image load")
                 }
-            }
+            }, 850)  // Court délai pour s'assurer que l'ImageView a chargé l'image
         }
-    }
-
-    /**
-     * Met à jour la rotation de la minimap
-     */
-    fun updateRotation(degrees: Float) {
-        if (!isEnabled) return
-        minimapView.setMinimapRotation(degrees)
-        updateViewport()
     }
 
     /**
@@ -175,15 +165,6 @@ class MinimapController(
 
         // Mettre à jour le viewport immédiatement (pas de throttle pour le drag)
         lastUpdateTime = 0L
-        updateViewport()
-    }
-
-    /**
-     * Définit les dimensions de la carte chargée
-     */
-    fun setMapDimensions(width: Int, height: Int) {
-        currentMapWidth = width
-        currentMapHeight = height
         updateViewport()
     }
 }

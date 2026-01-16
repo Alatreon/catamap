@@ -16,11 +16,10 @@ import androidx.core.graphics.scale
  */
 object MinimapGenerator {
 
-    // ⚙️ PARAMÈTRES CONFIGURABLES
+    // PARAMÈTRES CONFIGURABLES
     private const val MINIMAP_SCALE_PERCENT = 0.15f  // 15% de la taille originale
     private const val MIN_MINIMAP_SIZE = 200         // Taille minimale (pour petites cartes)
     private const val MAX_MINIMAP_SIZE = 1500        // Taille maximale (sécurité mémoire)
-    private const val MINIMAP_QUALITY = 90           // Qualité PNG (0-100)
 
 
     /**

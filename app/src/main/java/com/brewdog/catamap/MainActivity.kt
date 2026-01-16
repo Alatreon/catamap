@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var mapExecutor: ExecutorService? = null
     private var adjustMapRetryCount = 0
     private val maxAdjustRetries = 20
-    private val MINIMAP_SCREEN_PERCENT = 0.40f  // 18% de la largeur écran
+    private val miniMapScreenPercent = 0.40f  // 18% de la largeur écran
     private var minimapController: MinimapController? = null
     private var minimapEnabled = false
 
@@ -70,11 +70,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 mapView.minScale = calculatedMinScale
                 mapView.maxScale = 2.0f
 
-                if (!isMapAdjusted) {
+                val needsPadding = rotateWithCompass || manualRotateEnabled
+
+                if (!isMapAdjusted && needsPadding) {
                     android.util.Log.d("MainActivity", "imageEventListener: appel adjustMapForRotation")
                     adjustMapForRotation(mapView)
+                } else if (isMapAdjusted && !needsPadding) {
+                    android.util.Log.d("MainActivity", "imageEventListener: retrait padding")
+                    resetMapToNormalSize(mapView)
                 } else {
-                    android.util.Log.d("MainActivity", "imageEventListener: skip adjustMapForRotation car déjà ajusté")
+                    android.util.Log.d("MainActivity", "imageEventListener: skip, état correct")
                 }
 
                 mapView.postDelayed({
@@ -117,7 +122,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 android.util.Log.d("MainActivity", "minScale appliqué: $calculatedMinScale")
 
                 if (mapView.isVisible && !isMapAdjusted) {
-                    adjustMapForRotation(mapView)
+                    if (rotateWithCompass || manualRotateEnabled) {
+                        adjustMapForRotation(mapView)
+                    }
 
                     mapView.postDelayed({
                         val center = PointF(
@@ -308,6 +315,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         resetMapRotation()
                     }
                     updateRotationAndCompass()
+                    updateViewportPadding()
                     true
                 }
                 R.id.menu_rotate_manual -> {
@@ -318,6 +326,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     } else {
                         resetMapRotation()
                     }
+                    updateViewportPadding()
                     true
                 }
                 R.id.menu_battery_saver -> {
@@ -356,6 +365,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             compassView.visibility = View.GONE
             resetMapRotation()
             setSensorsEnabled(false)
+            updateViewportPadding()
         } else {
             compassView.visibility = View.VISIBLE
             setSensorsEnabled(true)
@@ -551,6 +561,64 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         android.util.Log.d("MainActivity", "adjustMapForRotation: TERMINE, isMapAdjusted=true")
     }
 
+    /**
+     * Réinitialise le viewport à la taille normale (sans padding)
+     */
+    private fun resetMapToNormalSize(map: SubsamplingScaleImageView) {
+        if (!isMapAdjusted) {
+            android.util.Log.d("MainActivity", "resetMapToNormalSize: carte déjà en taille normale")
+            return
+        }
+
+        android.util.Log.d("MainActivity", "resetMapToNormalSize: retrait du padding")
+
+        // Capturer l'état actuel
+        if (map.isReady) {
+            mapState.capture(map)
+        }
+
+        // Réinitialiser les transformations
+        map.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        map.translationX = 0f
+        map.translationY = 0f
+        map.requestLayout()
+
+        // Restaurer le pivot au centre
+        map.post {
+            map.pivotX = map.width / 2f
+            map.pivotY = map.height / 2f
+
+            // Restaurer l'état
+            if (map.isReady) {
+                mapState.apply(map)
+            }
+
+            android.util.Log.d("MainActivity", "resetMapToNormalSize: TERMINE")
+        }
+
+        isMapAdjusted = false
+    }
+
+    /**
+     * Applique ou retire le padding selon le mode de rotation actif
+     */
+    private fun updateViewportPadding() {
+        val needsPadding = rotateWithCompass || manualRotateEnabled
+
+        android.util.Log.d("MainActivity", "updateViewportPadding: needsPadding=$needsPadding (compass=$rotateWithCompass, manual=$manualRotateEnabled)")
+
+        if (needsPadding && !isMapAdjusted) {
+            // Activer le padding
+            adjustMapForRotation(mapView)
+        } else if (!needsPadding && isMapAdjusted) {
+            // Désactiver le padding
+            resetMapToNormalSize(mapView)
+        }
+    }
+
     private fun setupRotationTouch(map: AccessibleSubsamplingImageView) {
         map.setOnTouchListener { v, event ->
             rotationDetector.onTouchEvent(event)
@@ -607,9 +675,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun setupMinimap() {
         val minimapView = findViewById<MinimapView>(R.id.minimapView)
 
-        // 🆕 Calculer la taille proportionnelle à l'écran (18%)
+        // Calculer la taille proportionnelle à l'écran (18%)
         val screenWidth = resources.displayMetrics.widthPixels
-        val minimapSize = (screenWidth * MINIMAP_SCREEN_PERCENT).toInt()
+        val minimapSize = (screenWidth * miniMapScreenPercent).toInt()
 
         // Appliquer la taille calculée
         val params = minimapView.layoutParams as FrameLayout.LayoutParams
@@ -617,7 +685,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         params.height = minimapSize
         minimapView.layoutParams = params
 
-        android.util.Log.d("MainActivity", "Minimap size: ${minimapSize}px (${(MINIMAP_SCREEN_PERCENT * 100).toInt()}% écran)")
+        android.util.Log.d("MainActivity", "Minimap size: ${minimapSize}px (${(miniMapScreenPercent * 100).toInt()}% écran)")
 
         // Charger la préférence
         val prefs = getSharedPreferences("settings", MODE_PRIVATE)
@@ -625,7 +693,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         // Initialiser le contrôleur
         minimapController = MinimapController(
-            context = this,
             minimapView = minimapView,
             mainMapView = mapView
         )
@@ -667,6 +734,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             minimapController?.loadMinimapImage(minimapUri)
         }
     }
+
 
     /**
      * Génère la minimap à la volée pour les cartes qui n'en ont pas
@@ -889,7 +957,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun rotateMapTo(angle: Float) {
         mapView.rotation = angle
-        minimapController?.updateRotation(angle)  // 🆕 AJOUTÉ
+        minimapController?.updateViewport()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
