@@ -1,4 +1,4 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.ui.adapters
 
 import android.content.Context
 import android.util.AttributeSet

@@ -1,10 +1,12 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.utils.image
 
 import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
 import android.net.Uri
+import android.util.Log
 import android.view.View
+import com.brewdog.catamap.ui.adapters.MinimapView
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 
 /**
@@ -17,9 +19,9 @@ class MinimapController(
     private val mainMapView: SubsamplingScaleImageView
 ) {
 
-    // ⚙️ PARAMÈTRES CONFIGURABLES
+    // PARAMÈTRES CONFIGURABLES
     companion object {
-        private const val UPDATE_THROTTLE_MS = 66L  // ~15fps
+        private const val UPDATE_THROTTLE_MS = 10L  // ~15fps
     }
 
     // État
@@ -60,9 +62,9 @@ class MinimapController(
             minimapWidth = minimapView.width
             minimapHeight = minimapView.height
 
-            android.util.Log.d("MinimapController", "Minimap dimensions: ${minimapWidth}x${minimapHeight}")
+            Log.d("MinimapController", "Minimap dimensions: ${minimapWidth}x${minimapHeight}")
 
-            // 🆕 Forcer une mise à jour immédiate
+            // Forcer une mise à jour immédiate
             mainMapView.post {
                 if (mainMapView.isReady) {
                     currentMapWidth = mainMapView.sWidth
@@ -71,15 +73,6 @@ class MinimapController(
                 }
             }
         }
-    }
-
-    /**
-     * Met à jour la rotation de la minimap
-     */
-    fun updateRotation(degrees: Float) {
-        if (!isEnabled) return
-        minimapView.setMinimapRotation(degrees)
-        updateViewport()
     }
 
     /**

@@ -1,19 +1,30 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.ui.dialogs
 
 import android.app.Dialog
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
+import com.brewdog.catamap.R
+import com.brewdog.catamap.data.models.MapItem
+import com.brewdog.catamap.data.repository.MapRepository
+import com.brewdog.catamap.utils.image.MapImageConverter
+import com.brewdog.catamap.utils.image.MapModeDetector
+import com.brewdog.catamap.utils.image.MinimapGenerator
 import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
+import com.brewdog.catamap.data.models.Category
+import com.brewdog.catamap.data.models.MapDatabase
+import com.brewdog.catamap.utils.logging.Logger
 
 class AddEditMapDialog : DialogFragment() {
 
@@ -38,7 +49,7 @@ class AddEditMapDialog : DialogFragment() {
     private lateinit var btnCancel: Button
     private lateinit var btnSave: Button
 
-    // CORRECTION 3: Stocker le Job pour pouvoir l'annuler
+    // Stocker le Job pour pouvoir l'annuler
     private var imageProcessingJob: Job? = null
 
     private val selectImageLauncher = registerForActivityResult(
@@ -143,7 +154,7 @@ class AddEditMapDialog : DialogFragment() {
                 // Vérifier une nouvelle fois
                 if (!isAdded) return@launch
 
-                // 🆕 Mise à jour UI - phase 3: Génération minimap light
+                // Mise à jour UI - phase 3: Génération minimap light
                 withContext(Dispatchers.Main) {
                     textImageStatus.text = "Generation minimap light..."
                 }
@@ -157,7 +168,7 @@ class AddEditMapDialog : DialogFragment() {
 
                 if (!isAdded) return@launch
 
-                // 🆕 Mise à jour UI - phase 4: Génération minimap dark
+                // Mise à jour UI - phase 4: Génération minimap dark
                 withContext(Dispatchers.Main) {
                     textImageStatus.text = "Generation minimap dark..."
                 }
@@ -183,7 +194,7 @@ class AddEditMapDialog : DialogFragment() {
                             selectedDarkUri = negativeUri
                         }
 
-                        // 🆕 Stocker les minimap
+                        // Stocker les minimap
                         selectedLightMinimapUri = lightMinimapUri
                         selectedDarkMinimapUri = darkMinimapUri
 
@@ -196,7 +207,7 @@ class AddEditMapDialog : DialogFragment() {
 
             } catch (e: CancellationException) {
                 // Gestion normale de l'annulation
-                android.util.Log.d("AddEditMapDialog", "Traitement image annulé")
+                Log.d("AddEditMapDialog", "Traitement image annulé")
 
             } catch (e: Exception) {
                 // Gestion des autres erreurs
@@ -222,8 +233,8 @@ class AddEditMapDialog : DialogFragment() {
 
 
     private fun populateFields() {
-        val storage = MapStorage(requireContext())
-        val database = storage.load()
+        val repository = MapRepository(requireContext())
+        val database = repository.loadDatabase()
         val categoryNames = database.categories.map { it.name }
         val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, categoryNames)
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -259,8 +270,8 @@ class AddEditMapDialog : DialogFragment() {
             return
         }
 
-        val storage = MapStorage(requireContext())
-        val database = storage.load()
+        val repository = MapRepository(requireContext())
+        val database = repository.loadDatabase()
         val category = database.categories.find { it.name == spinnerCategory.selectedItem?.toString() }
         val map = MapItem(
             id = existingMap?.id ?: UUID.randomUUID().toString(),
@@ -289,14 +300,14 @@ class AddEditMapDialog : DialogFragment() {
             .show()
     }
 
-    // CORRECTION 3: Annuler les coroutines lors de la fermeture du dialog
-    override fun onDismiss(dialog: android.content.DialogInterface) {
+    // Annuler les coroutines lors de la fermeture du dialog
+    override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
         // Annuler le traitement d'image en cours si le dialog est fermé
         imageProcessingJob?.cancel()
     }
 
-    // CORRECTION 3 (bonus): Nettoyer également en cas de destruction du fragment
+    // Nettoyer en cas de destruction du fragment
     override fun onDestroyView() {
         super.onDestroyView()
         imageProcessingJob?.cancel()

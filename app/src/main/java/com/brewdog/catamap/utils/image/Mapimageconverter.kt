@@ -1,8 +1,9 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.utils.image
 
 import android.content.Context
 import android.graphics.*
 import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -32,34 +33,34 @@ object MapImageConverter {
             // 1. Obtenir les DIMENSIONS EXACTES de l'image source
             val originalDimensions = getImageDimensions(context, sourceUri)
             if (originalDimensions == null) {
-                android.util.Log.e("MapImageConverter", "Cannot get original dimensions")
+                Log.e("MapImageConverter", "Cannot get original dimensions")
                 return@withContext null
             }
 
             val (originalWidth, originalHeight) = originalDimensions
-            android.util.Log.d("MapImageConverter", "Original dimensions: ${originalWidth}x${originalHeight}")
+            Log.d("MapImageConverter", "Original dimensions: ${originalWidth}x${originalHeight}")
 
             // 2. Charger l'image source
             sourceBitmap = loadBitmapFullSize(context, sourceUri)
             if (sourceBitmap == null) {
-                android.util.Log.e("MapImageConverter", "Cannot load source bitmap")
+                Log.e("MapImageConverter", "Cannot load source bitmap")
                 return@withContext null
             }
 
-            android.util.Log.d("MapImageConverter", "Loaded bitmap: ${sourceBitmap.width}x${sourceBitmap.height}")
+            Log.d("MapImageConverter", "Loaded bitmap: ${sourceBitmap.width}x${sourceBitmap.height}")
 
             // 3. Appliquer la transformation (inversion des couleurs)
             transformedBitmap = applyColorMatrix(sourceBitmap, getInvertMatrix())
 
             // 4. FORCER le redimensionnement exact aux dimensions originales
             finalBitmap = if (transformedBitmap.width != originalWidth || transformedBitmap.height != originalHeight) {
-                android.util.Log.d("MapImageConverter", "Resizing from ${transformedBitmap.width}x${transformedBitmap.height} to ${originalWidth}x${originalHeight}")
+                Log.d("MapImageConverter", "Resizing from ${transformedBitmap.width}x${transformedBitmap.height} to ${originalWidth}x${originalHeight}")
                 val resized = transformedBitmap.scale(originalWidth, originalHeight)
                 transformedBitmap.recycle()
                 transformedBitmap = null
                 resized
             } else {
-                android.util.Log.d("MapImageConverter", "Dimensions already match, no resize needed")
+                Log.d("MapImageConverter", "Dimensions already match, no resize needed")
                 transformedBitmap
             }
 
@@ -69,12 +70,12 @@ object MapImageConverter {
                 finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
 
-            android.util.Log.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
+            Log.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
 
             return@withContext Uri.fromFile(outputFile)
 
         } catch (e: Exception) {
-            android.util.Log.e("MapImageConverter", "Error in conversion", e)
+            Log.e("MapImageConverter", "Error in conversion", e)
             return@withContext null
         } finally {
             // Garantir la libération de tous les bitmaps, même en cas d'erreur
@@ -97,7 +98,7 @@ object MapImageConverter {
                 Pair(options.outWidth, options.outHeight)
             }
         } catch (e: Exception) {
-            android.util.Log.e("MapImageConverter", "Error getting dimensions", e)
+            Log.e("MapImageConverter", "Error getting dimensions", e)
             null
         }
     }
@@ -114,7 +115,7 @@ object MapImageConverter {
                 BitmapFactory.decodeStream(stream, null, options)
             }
         } catch (e: Exception) {
-            android.util.Log.e("MapImageConverter", "Error loading bitmap", e)
+            Log.e("MapImageConverter", "Error loading bitmap", e)
             null
         }
     }

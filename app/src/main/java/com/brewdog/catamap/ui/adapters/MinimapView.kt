@@ -1,12 +1,15 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.ui.adapters
 
 import android.content.Context
 import android.graphics.*
+import android.net.Uri
 import android.util.AttributeSet
 import android.view.MotionEvent
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
-import androidx.core.content.ContextCompat
+import com.brewdog.catamap.constants.AppConstants
+
 
 /**
  * Vue personnalisée pour afficher la minimap avec viewport
@@ -17,11 +20,12 @@ class MinimapView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
-    // ⚙️ PARAMÈTRES CONFIGURABLES
+    // PARAMÈTRES CONFIGURABLES
     companion object {
         private const val VIEWPORT_STROKE_WIDTH_DP = 2f     // Épaisseur du cadre
         private const val VIEWPORT_CORNER_RADIUS_DP = 0f    // Coins arrondis (0 = carrés)
         private val VIEWPORT_COLOR = Color.RED              // Couleur du cadre
+        const val SCREEN_PERCENT = 0.40f
     }
 
     // Vues internes
@@ -54,7 +58,7 @@ class MinimapView @JvmOverloads constructor(
         // Fond semi-transparent
         setBackgroundColor(Color.argb(200, 0, 0, 0))
 
-        // 🆕 Forcer une taille minimale
+        // Forcer une taille minimale
         minimumWidth = (120 * resources.displayMetrics.density).toInt()
         minimumHeight = (120 * resources.displayMetrics.density).toInt()
     }
@@ -62,7 +66,7 @@ class MinimapView @JvmOverloads constructor(
     /**
      * Définit l'image de la minimap
      */
-    fun setMinimapImage(uri: android.net.Uri?) {
+    fun setMinimapImage(uri: Uri?) {
         if (uri != null) {
             imageView.setImageURI(uri)
         } else {
@@ -122,7 +126,7 @@ class MinimapView @JvmOverloads constructor(
     /**
      * Overlay personnalisé pour dessiner le viewport
      */
-    private inner class ViewportOverlay(context: Context) : android.view.View(context) {
+    private inner class ViewportOverlay(context: Context) : View(context) {
         private var viewport: RectF? = null
         private val paint = Paint().apply {
             color = VIEWPORT_COLOR

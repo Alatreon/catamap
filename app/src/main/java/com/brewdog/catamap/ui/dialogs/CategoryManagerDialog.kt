@@ -1,4 +1,4 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.ui.dialogs
 
 import android.app.Dialog
 import android.os.Bundle
@@ -14,6 +14,9 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.DialogFragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.brewdog.catamap.R
+import com.brewdog.catamap.data.models.Category
+import com.brewdog.catamap.data.models.MapDatabase
 import java.util.UUID
 
 /**

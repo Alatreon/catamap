@@ -1,9 +1,10 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.utils.image
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -16,11 +17,10 @@ import androidx.core.graphics.scale
  */
 object MinimapGenerator {
 
-    // ⚙️ PARAMÈTRES CONFIGURABLES
+    // PARAMÈTRES CONFIGURABLES
     private const val MINIMAP_SCALE_PERCENT = 0.15f  // 15% de la taille originale
     private const val MIN_MINIMAP_SIZE = 200         // Taille minimale (pour petites cartes)
     private const val MAX_MINIMAP_SIZE = 1500        // Taille maximale (sécurité mémoire)
-    private const val MINIMAP_QUALITY = 90           // Qualité PNG (0-100)
 
 
     /**
@@ -41,21 +41,21 @@ object MinimapGenerator {
             // 1. Obtenir les dimensions de l'image source
             val sourceDimensions = getImageDimensions(context, sourceUri)
             if (sourceDimensions == null) {
-                android.util.Log.e("MinimapGenerator", "Impossible d'obtenir les dimensions")
+                Log.e("MinimapGenerator", "Impossible d'obtenir les dimensions")
                 return@withContext null
             }
 
             val (sourceWidth, sourceHeight) = sourceDimensions
-            android.util.Log.d("MinimapGenerator", "Source: ${sourceWidth}×${sourceHeight}")
+            Log.d("MinimapGenerator", "Source: ${sourceWidth}×${sourceHeight}")
 
             // 2. Calculer la taille optimale de la minimap
             val (minimapWidth, minimapHeight) = calculateMinimapSize(sourceWidth, sourceHeight)
-            android.util.Log.d("MinimapGenerator", "Minimap: ${minimapWidth}×${minimapHeight}")
+            Log.d("MinimapGenerator", "Minimap: ${minimapWidth}×${minimapHeight}")
 
             // 3. Charger l'image source avec un sample rate adapté
             sourceBitmap = loadBitmapOptimized(context, sourceUri, minimapWidth, minimapHeight)
             if (sourceBitmap == null) {
-                android.util.Log.e("MinimapGenerator", "Impossible de charger l'image source")
+                Log.e("MinimapGenerator", "Impossible de charger l'image source")
                 return@withContext null
             }
 
@@ -68,12 +68,12 @@ object MinimapGenerator {
                 minimapBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
 
-            android.util.Log.d("MinimapGenerator", "Minimap générée: ${outputFile.name}")
+            Log.d("MinimapGenerator", "Minimap générée: ${outputFile.name}")
 
             return@withContext Uri.fromFile(outputFile)
 
         } catch (e: Exception) {
-            android.util.Log.e("MinimapGenerator", "Erreur génération minimap", e)
+            Log.e("MinimapGenerator", "Erreur génération minimap", e)
             return@withContext null
         } finally {
             // Libérer la mémoire
@@ -108,7 +108,7 @@ object MinimapGenerator {
             }
         }
 
-        android.util.Log.d(
+        Log.d(
             "MinimapGenerator",
             "Source: ${sourceWidth}×${sourceHeight} → Minimap: ${width}×${height} (${(MINIMAP_SCALE_PERCENT * 100).toInt()}%)"
         )
@@ -129,7 +129,7 @@ object MinimapGenerator {
                 Pair(options.outWidth, options.outHeight)
             }
         } catch (e: Exception) {
-            android.util.Log.e("MinimapGenerator", "Erreur lecture dimensions", e)
+            Log.e("MinimapGenerator", "Erreur lecture dimensions", e)
             null
         }
     }
@@ -154,7 +154,7 @@ object MinimapGenerator {
                 targetWidth, targetHeight
             )
 
-            android.util.Log.d("MinimapGenerator", "Sample size: $sampleSize")
+            Log.d("MinimapGenerator", "Sample size: $sampleSize")
 
             // Deuxième passe : charger avec le sample rate
             context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -165,7 +165,7 @@ object MinimapGenerator {
                 BitmapFactory.decodeStream(stream, null, options)
             }
         } catch (e: Exception) {
-            android.util.Log.e("MinimapGenerator", "Erreur chargement bitmap", e)
+            Log.e("MinimapGenerator", "Erreur chargement bitmap", e)
             null
         }
     }

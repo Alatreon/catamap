@@ -1,9 +1,10 @@
-package com.brewdog.catamap
+package com.brewdog.catamap.utils.image
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import androidx.palette.graphics.Palette
 import androidx.core.graphics.get
 
@@ -12,7 +13,7 @@ import androidx.core.graphics.get
  */
 object MapModeDetector {
     /**
-     * Méthode 1 : Calcul de la luminosité moyenne
+     * Calcul de la luminosité moyenne
      */
     private fun analyzeWithLuminosity(bitmap: Bitmap): Boolean {
         var totalLuminosity = 0.0
@@ -34,7 +35,7 @@ object MapModeDetector {
     }
 
     /**
-     * Méthode 2 : Utilisation de Palette pour analyser les couleurs dominantes
+     * Utilisation de Palette pour analyser les couleurs dominantes
      */
     private fun analyzeWithPalette(bitmap: Bitmap): Boolean {
         val palette = Palette.from(bitmap).generate()
@@ -56,7 +57,7 @@ object MapModeDetector {
     }
 
     /**
-     * Méthode 3 : Analyse des coins de l'image (optimisée avec échantillonnage)
+     * Analyse des coins de l'image (optimisée avec échantillonnage)
      * Les marges/légendes sont souvent révélatrices du mode
      */
     private fun analyzeCorners(bitmap: Bitmap): Boolean {
@@ -97,7 +98,7 @@ object MapModeDetector {
     }
 
     /**
-     * Méthode 4 : Échantillonnage aléatoire de points sur toute l'image
+     * Échantillonnage aléatoire de points sur toute l'image
      */
     private fun analyzeSamplePoints(bitmap: Bitmap): Boolean {
         val sampleCount = 200
@@ -160,7 +161,7 @@ object MapModeDetector {
                 }
             }
         } catch (e: Exception) {
-            android.util.Log.e("MapModeDetector", "Error loading bitmap", e)
+            Log.e("MapModeDetector", "Error loading bitmap", e)
             null
         }
     }
@@ -188,7 +189,7 @@ object MapModeDetector {
             darkVotes >= methods.size / 2
 
         } catch (e: Exception) {
-            android.util.Log.e("MapModeDetector", "Error detecting mode", e)
+            Log.e("MapModeDetector", "Error detecting mode", e)
             false
         } finally {
             bitmap?.recycle()
