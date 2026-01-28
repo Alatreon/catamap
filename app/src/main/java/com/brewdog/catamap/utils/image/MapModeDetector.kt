@@ -168,7 +168,6 @@ object MapModeDetector {
 
     /**
      * Version synchrone pour les tests (utiliser avec précaution sur le thread principal)
-     * Version corrigée avec gestion mémoire sécurisée
      */
     fun isImageDarkModeSync(context: Context, uri: Uri): Boolean {
         var bitmap: Bitmap? = null

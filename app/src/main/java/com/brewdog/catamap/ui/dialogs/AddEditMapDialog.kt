@@ -23,8 +23,6 @@ import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 import com.brewdog.catamap.data.models.Category
-import com.brewdog.catamap.data.models.MapDatabase
-import com.brewdog.catamap.utils.logging.Logger
 
 class AddEditMapDialog : DialogFragment() {
 
