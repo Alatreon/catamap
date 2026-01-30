@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp"
+    android:gravity="center_vertical"
+    android:background="?attr/selectableItemBackground"
+    android:minHeight="56dp">
+
+    <!-- Drag handle -->
+    <ImageView
+        android:id="@+id/dragHandle"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_drag_handle"
+        android:alpha="0.5"
+        android:contentDescription="Réorganiser"
+        app:tint="?attr/colorOnSurface"/>
+
+    <!-- Indicateur calque actif -->
+    <View
+        android:id="@+id/activeIndicator"
+        android:layout_width="12dp"
+        android:layout_height="12dp"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:background="@drawable/layer_active_indicator"
+        android:visibility="gone"/>
+
+    <!-- Icône type de calque -->
+    <ImageView
+        android:id="@+id/layerTypeIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginEnd="12dp"
+        android:src="@drawable/ic_layer_empty"
+        android:contentDescription="Type de calque"
+        app:tint="?attr/colorOnSurface"/>
+
+    <!-- Nom du calque -->
+    <TextView
+        android:id="@+id/layerName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Calque 1"
+        android:textSize="16sp"
+        android:textColor="?attr/colorOnSurface"
+        android:singleLine="true"
+        android:ellipsize="end"/>
+
+    <!-- Toggle visibilité -->
+    <ImageButton
+        android:id="@+id/btnToggleVisibility"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:src="@drawable/ic_visibility"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Afficher/Masquer"
+        app:tint="?attr/colorOnSurface"/>
+
+    <!-- Bouton suppression -->
+    <ImageButton
+        android:id="@+id/btnDelete"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:src="@drawable/ic_delete"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Supprimer"
+        app:tint="@android:color/holo_red_light"/>
+
+</LinearLayout>

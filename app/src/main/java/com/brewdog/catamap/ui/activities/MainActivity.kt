@@ -4,11 +4,11 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.PointF
 import android.os.Bundle
-import android.view.MotionEvent
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.PopupMenu
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -24,6 +24,8 @@ import com.brewdog.catamap.ui.adapters.MinimapView
 import com.brewdog.catamap.ui.views.RotationGestureDetector
 import com.brewdog.catamap.utils.logging.Logger
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import com.brewdog.catamap.ui.annotation.EditBottomSheet
+
 
 /**
  * Activité principale de l'application - VERSION REFACTORISÉE
@@ -64,6 +66,7 @@ class MainActivity : AppCompatActivity() {
     private var minimapEnabled = false
     private lateinit var rotationDetector: RotationGestureDetector
     private var batterySaverEnabled = false
+    private var editBottomSheet: EditBottomSheet? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -271,8 +274,6 @@ class MainActivity : AppCompatActivity() {
         popupMenu.menuInflater.inflate(R.menu.main_menu, popupMenu.menu)
 
         // Mettre à jour les états des items
-        val currentMap = mapViewController.getCurrentMap()
-
         popupMenu.menu.apply {
             findItem(R.id.menu_dark_mode)?.isChecked = mapViewController.isDarkModeEnabled()
             findItem(R.id.menu_rotate_compass)?.isChecked = rotateWithCompass
@@ -321,6 +322,7 @@ class MainActivity : AppCompatActivity() {
             R.id.menu_map_manager -> openMapManager()
             R.id.menu_reset_rotation -> resetRotation()
             R.id.menu_battery_saver -> toggleBatterySaver()
+            R.id.menu_edit_map -> {                openEditMode()            }
         }
 
         Logger.exit(TAG, "handleMenuItemClick")
@@ -596,6 +598,56 @@ class MainActivity : AppCompatActivity() {
         params.width = minimapSize
         params.height = minimapSize
         minimapView.layoutParams = params
+    }
+
+    /**
+     * Ouvre le mode édition
+     * Désactive la rotation si active, puis affiche le Bottom Sheet
+     */
+    private fun openEditMode() {
+        Logger.entry(TAG, "openEditMode")
+
+        // Désactiver la rotation si active
+        if (rotateWithCompass) {
+            rotateWithCompass = false
+            compassManager.setRotateWithCompass(false)
+            mapViewController.setRotation(0f, false)
+            Logger.i(TAG, "Compass rotation disabled for edit mode")
+        }
+
+        if (manualRotateEnabled) {
+            manualRotateEnabled = false
+            mapViewController.setRotation(0f, false)
+            Logger.i(TAG, "Manual rotation disabled for edit mode")
+        }
+
+        // Récupérer la carte actuelle
+        val currentMap = mapViewController.getCurrentMap()
+
+        if (currentMap == null) {
+            Toast.makeText(this, "Aucune carte chargée", Toast.LENGTH_SHORT).show()
+            Logger.w(TAG, "No map loaded, cannot open edit mode")
+            return
+        }
+
+        // Afficher le Bottom Sheet
+        showEditBottomSheet(currentMap.id)
+    }
+
+    /**
+     * Affiche le Bottom Sheet d'édition
+     */
+    private fun showEditBottomSheet(mapId: String) {
+        Logger.entry(TAG, "showEditBottomSheet", mapId)
+
+        // Fermer le Bottom Sheet existant si ouvert
+        editBottomSheet?.dismiss()
+
+        // Créer et afficher le nouveau Bottom Sheet
+        editBottomSheet = EditBottomSheet.newInstance(mapId)
+        editBottomSheet?.show(supportFragmentManager, "EditBottomSheet")
+
+        Logger.i(TAG, "Edit bottom sheet shown")
     }
 
 }

@@ -11,4 +11,5 @@
     <string name="changer_de_carte">Changer de carte</string>
     <string name="gerer_les_cartes">Gérer les cartes</string>
     <string name="minimap">Minimap</string>
+    <string name="editer_la_carte">Éditer la carte</string>
 </resources>

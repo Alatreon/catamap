@@ -32,5 +32,8 @@
     <item
         android:id="@+id/menu_map_manager"
         android:title="@string/gerer_les_cartes" />
+    <item
+        android:id="@+id/menu_edit_map"
+        android:title="@string/editer_la_carte" />
 
 </menu>

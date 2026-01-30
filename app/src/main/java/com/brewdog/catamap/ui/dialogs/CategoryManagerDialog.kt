@@ -2,6 +2,7 @@ package com.brewdog.catamap.ui.dialogs
 
 import android.app.Dialog
 import android.os.Bundle
+import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -70,8 +71,11 @@ class CategoryManagerDialog : DialogFragment() {
     }
 
     private fun showAddCategoryDialog() {
-        val input = EditText(requireContext())
+        // Créer un ContextThemeWrapper pour forcer le thème
+        val themedContext = ContextThemeWrapper(requireContext(), R.style.Theme_CataMap_Dialog)
+        val input = EditText(themedContext)
         input.hint = "Nom de la catégorie"
+        input.setPadding(50, 30, 50, 30)  // Ajouter du padding pour mieux voir
 
         AlertDialog.Builder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Nouvelle catégorie")
@@ -94,6 +98,7 @@ class CategoryManagerDialog : DialogFragment() {
             .setNegativeButton("Annuler", null)
             .show()
     }
+
 
     private fun deleteCategory(category: Category) {
         if (category.isSystem) {
