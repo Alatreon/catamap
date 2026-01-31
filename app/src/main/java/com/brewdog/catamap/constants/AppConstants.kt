@@ -15,7 +15,7 @@ object AppConstants {
         const val MIN_DECODER_THREADS = 2
         const val DECODER_THREAD_PRIORITY = Thread.NORM_PRIORITY + 1
     }
-    
+
     // COMPASS CONFIGURATION
     object Compass {
         const val SENSOR_UPDATE_INTERVAL_MS = 50L

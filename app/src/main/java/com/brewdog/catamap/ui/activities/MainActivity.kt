@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.PointF
 import android.os.Bundle
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -12,9 +13,14 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import com.brewdog.catamap.R
 import com.brewdog.catamap.constants.AppConstants
+import com.brewdog.catamap.data.repository.AnnotationRepository
 import com.brewdog.catamap.data.repository.MapRepository
+import com.brewdog.catamap.domain.annotation.LayerManager
 import com.brewdog.catamap.domain.compass.CompassManager
 import com.brewdog.catamap.domain.map.MapLoader
 import com.brewdog.catamap.domain.map.MapViewController
@@ -25,6 +31,10 @@ import com.brewdog.catamap.ui.views.RotationGestureDetector
 import com.brewdog.catamap.utils.logging.Logger
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.brewdog.catamap.ui.annotation.EditBottomSheet
+import com.brewdog.catamap.domain.annotation.tools.ToolsManager
+import com.brewdog.catamap.ui.annotation.tools.ToolsOverlay
+import com.brewdog.catamap.ui.annotation.tools.ToolsOverlayListener
+import kotlinx.coroutines.launch
 
 
 /**
@@ -38,7 +48,7 @@ import com.brewdog.catamap.ui.annotation.EditBottomSheet
  * - MapLoader: Gestion du chargement
  * - RotationGestureDetector: Détection des gestes
  */
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
     companion object {
         private const val TAG = "MainActivity"
@@ -67,6 +77,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rotationDetector: RotationGestureDetector
     private var batterySaverEnabled = false
     private var editBottomSheet: EditBottomSheet? = null
+    private lateinit var toolsManager: ToolsManager
+    private var toolsOverlay: ToolsOverlay? = null
+    private var layerManager: LayerManager? = null
+    // Sauvegarde de l'état avant mode édition
+    private var preEditState: PreEditState? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -89,6 +104,8 @@ class MainActivity : AppCompatActivity() {
 
         // Charger la carte
         loadInitialMap()
+        // Initialiser le ToolsManager
+        toolsManager = ToolsManager(this)
 
         Logger.exit(TAG, "onCreate")
     }
@@ -334,6 +351,10 @@ class MainActivity : AppCompatActivity() {
     private fun loadInitialMap() {
         Logger.entry(TAG, "loadInitialMap")
 
+        // Nettoyer l'ancien LayerManager si on change de carte
+        layerManager?.cleanup()
+        layerManager = null
+
         val database = repository.loadDatabase()
 
         // Récupérer la carte depuis l'intent ou la carte par défaut
@@ -557,6 +578,13 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         Logger.entry(TAG, "onDestroy")
 
+        // Cleanup du LayerManager
+        layerManager?.let { manager ->
+            manager.cleanup()
+            Logger.i(TAG, "LayerManager cleaned up")
+        }
+        layerManager = null
+
         try {
             compassManager.unregister()
             mapViewController.cleanup()
@@ -565,6 +593,8 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Logger.e(TAG, "Error during cleanup", e)
         }
+        // Cleanup overlay
+        hideToolsOverlay()
 
         super.onDestroy()
         Logger.exit(TAG, "onDestroy")
@@ -640,14 +670,197 @@ class MainActivity : AppCompatActivity() {
     private fun showEditBottomSheet(mapId: String) {
         Logger.entry(TAG, "showEditBottomSheet", mapId)
 
-        // Fermer le Bottom Sheet existant si ouvert
+        // Fermer l'ancien Bottom Sheet si existant
         editBottomSheet?.dismiss()
 
-        // Créer et afficher le nouveau Bottom Sheet
+        // Créer et afficher le nouveau
         editBottomSheet = EditBottomSheet.newInstance(mapId)
-        editBottomSheet?.show(supportFragmentManager, "EditBottomSheet")
+        editBottomSheet!!.show(supportFragmentManager, "EditBottomSheet")
+
+        // Récupérer le LayerManager APRÈS que l'EditBottomSheet soit créé
+        editBottomSheet!!.lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                // Le LayerManager est maintenant initialisé
+                layerManager = editBottomSheet?.getLayerManager()
+                Logger.d(TAG, "LayerManager récupéré de EditBottomSheet")
+            }
+        })
 
         Logger.i(TAG, "Edit bottom sheet shown")
+    }
+
+    override fun onToolsOverlayClosed() {
+        Logger.entry(TAG, "onToolsOverlayClosed")
+
+        // Fermer l'overlay
+        hideToolsOverlay()
+
+        // Réouvrir le Bottom Sheet d'édition
+        val currentMap = mapViewController.getCurrentMap()
+        if (currentMap != null) {
+            showEditBottomSheet(currentMap.id)
+        }
+    }
+
+    /**
+     * Affiche l'overlay des outils
+     */
+    fun showToolsOverlay() {
+        Logger.entry(TAG, "showToolsOverlay")
+
+        val currentMap = mapViewController.getCurrentMap()
+        if (currentMap == null) {
+            Logger.w(TAG, "No map loaded")
+            return
+        }
+
+        // Vérifier que le LayerManager existe
+        if (layerManager == null) {
+            Logger.e(TAG, "LayerManager not available")
+            return
+        }
+
+        // Entrer en mode édition
+        enterEditMode()
+
+        // Vérifier qu'il y a un calque actif
+        val activeLayer = layerManager!!.getActiveLayer()
+        if (activeLayer == null) {
+            Logger.w(TAG, "No active layer available")
+            exitEditMode()
+            return
+        }
+
+        // Afficher l'overlay avec le LayerManager existant
+        toolsOverlay = ToolsOverlay.newInstance(currentMap.id, toolsManager, layerManager!!)
+
+        supportFragmentManager.beginTransaction()
+            .add(android.R.id.content, toolsOverlay!!, "ToolsOverlay")
+            .commit()
+
+        Logger.i(TAG, "Tools overlay shown with active layer: ${activeLayer.name}")
+    }
+
+
+
+
+
+    /**
+     * Masque l'overlay des outils
+     */
+    fun hideToolsOverlay() {
+        Logger.entry(TAG, "hideToolsOverlay")
+
+        toolsOverlay?.let { overlay ->
+            supportFragmentManager.beginTransaction()
+                .remove(overlay)
+                .commit()
+            toolsOverlay = null
+
+            // Désactiver l'outil actif
+            toolsManager.clearTool()
+
+            Logger.i(TAG, "Tools overlay hidden")
+        }
+
+        // NE PAS mettre layerManager = null ici !
+        // Il sera réutilisé par le prochain EditBottomSheet
+
+        // Sortir du mode édition
+        exitEditMode()
+    }
+
+    /**
+     * Entre en mode édition
+     * Sauvegarde l'état actuel et désactive les éléments UI
+     */
+    private fun enterEditMode() {
+        Logger.entry(TAG, "enterEditMode")
+
+        // Sauvegarder l'état actuel
+        preEditState = PreEditState(
+            minimapEnabled = minimapEnabled,
+            rotateWithCompass = rotateWithCompass,
+            manualRotateEnabled = manualRotateEnabled
+        )
+
+        Logger.d(TAG, "State saved: $preEditState")
+
+        // Masquer les éléments UI
+        menuButton.visibility = View.GONE
+        compassView.visibility = View.GONE
+
+        // Désactiver la minimap si active
+        if (minimapEnabled) {
+            minimapEnabled = false
+            minimapController.setEnabled(false)
+            Logger.d(TAG, "Minimap disabled")
+        }
+
+        // Désactiver la rotation boussole si active
+        if (rotateWithCompass) {
+            rotateWithCompass = false
+            compassManager.setRotateWithCompass(false)
+            mapViewController.setRotation(0f, false)
+            Logger.d(TAG, "Compass rotation disabled")
+        }
+
+        // Désactiver la rotation manuelle si active
+        if (manualRotateEnabled) {
+            manualRotateEnabled = false
+            mapViewController.setRotationEnabled(false)
+            mapViewController.setRotation(0f, false)
+            Logger.d(TAG, "Manual rotation disabled")
+        }
+
+        Logger.i(TAG, "Edit mode entered")
+    }
+
+    /**
+     * Sort du mode édition
+     * Restaure l'état sauvegardé et réactive les éléments UI
+     */
+    private fun exitEditMode() {
+        Logger.entry(TAG, "exitEditMode")
+
+        val state = preEditState
+        if (state == null) {
+            Logger.w(TAG, "No state to restore")
+            return
+        }
+
+        Logger.d(TAG, "Restoring state: $state")
+
+        // Réafficher les éléments UI
+        menuButton.visibility = View.VISIBLE
+        compassView.visibility = View.VISIBLE
+
+        // Restaurer la minimap
+        minimapEnabled = state.minimapEnabled
+        minimapController.setEnabled(state.minimapEnabled)
+        if (state.minimapEnabled) {
+            Logger.d(TAG, "Minimap restored")
+        }
+
+        // Restaurer la rotation boussole
+        rotateWithCompass = state.rotateWithCompass
+        compassManager.setRotateWithCompass(state.rotateWithCompass)
+        if (state.rotateWithCompass) {
+            mapViewController.setRotationEnabled(true)
+            Logger.d(TAG, "Compass rotation restored")
+        }
+
+        // Restaurer la rotation manuelle
+        manualRotateEnabled = state.manualRotateEnabled
+        if (state.manualRotateEnabled) {
+            mapViewController.setRotationEnabled(true)
+            Logger.d(TAG, "Manual rotation restored")
+        }
+
+        // Effacer l'état sauvegardé
+        preEditState = null
+
+        Logger.i(TAG, "Edit mode exited")
     }
 
 }

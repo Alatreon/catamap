@@ -16,6 +16,7 @@ import com.brewdog.catamap.data.repository.AnnotationRepository
 import com.brewdog.catamap.domain.annotation.LayerChangeListener
 import com.brewdog.catamap.domain.annotation.LayerManager
 import com.brewdog.catamap.domain.annotation.models.Layer
+import com.brewdog.catamap.ui.activities.MainActivity
 import com.brewdog.catamap.utils.logging.Logger
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -197,6 +198,30 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         // Ajouter un calque
         btnAddLayer.setOnClickListener {
             showAddLayerDialog()
+        }
+
+        // Bouton Outils
+        btnTools.setOnClickListener {
+            val layers = layerManager.getLayers()
+            val activeLayer = layerManager.getActiveLayer()
+            val canUseTools = layers.isNotEmpty() && activeLayer != null && activeLayer.isVisible
+
+            if (canUseTools) {
+                // Fermer le Bottom Sheet
+                dismiss()
+
+                // Afficher l'overlay des outils
+                (activity as? MainActivity)?.showToolsOverlay()
+
+                Logger.i(TAG, "Opening tools overlay")
+            } else {
+                // Toast si conditions non remplies
+                android.widget.Toast.makeText(
+                    requireContext(),
+                    "Il faut au moins un calque visible et actif pour commencer les modifications",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 
@@ -472,8 +497,16 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
             }
         }
 
-        // Cleanup
+        // Cleanup listeners seulement
         layerManager.removeListener(this)
-        layerManager.cleanup()
+
+        Logger.d(TAG, "LayerManager kept alive for ToolsOverlay")
+    }
+
+    /**
+     * Expose le LayerManager pour utilisation par MainActivity/ToolsOverlay
+     */
+    fun getLayerManager(): LayerManager {
+        return layerManager
     }
 }

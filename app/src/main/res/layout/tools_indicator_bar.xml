@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Bandeau d'indicateurs en haut de l'écran -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/indicatorBarRoot"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:orientation="horizontal"
+    android:background="#CC000000"
+    android:gravity="center_vertical"
+    android:paddingStart="16dp"
+    android:paddingEnd="16dp">
+
+    <!-- Icône indicateur -->
+    <ImageView
+        android:id="@+id/toolIndicatorIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:src="@drawable/ic_tool_text"
+        android:tint="@android:color/white"
+        android:contentDescription="Icône outil"/>
+
+    <!-- Nom de l'outil actif -->
+    <TextView
+        android:id="@+id/toolIndicatorText"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Aucun outil"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:layout_marginStart="12dp"
+        android:singleLine="true"
+        android:ellipsize="end"/>
+
+    <!-- Séparateur -->
+    <View
+        android:layout_width="1dp"
+        android:layout_height="24dp"
+        android:background="@android:color/white"
+        android:alpha="0.3"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"/>
+
+    <!-- Nom du calque actif -->
+    <TextView
+        android:id="@+id/activeLayerText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Calque 1"
+        android:textColor="@android:color/white"
+        android:textSize="14sp"
+        android:layout_marginEnd="12dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:maxWidth="120dp"/>
+
+    <!-- Séparateur (masqué si pas de couleur) -->
+    <View
+        android:id="@+id/colorSeparator"
+        android:layout_width="1dp"
+        android:layout_height="24dp"
+        android:background="@android:color/white"
+        android:alpha="0.3"
+        android:layout_marginEnd="12dp"/>
+
+    <!-- Rond de couleur active -->
+    <View
+        android:id="@+id/activeColorIndicator"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:background="@drawable/color_circle_background"/>
+
+</LinearLayout>
