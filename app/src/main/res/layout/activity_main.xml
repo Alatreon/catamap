@@ -50,6 +50,7 @@
         android:layout_gravity="start|top"
         android:background="@android:color/transparent"
         android:src="@drawable/ic_menu"
+        android:elevation="4dp"
         android:contentDescription="@string/menu_description"/>
 
     <!-- Boussole (marge dynamique appliquée via code) -->
@@ -61,6 +62,7 @@
         android:background="@android:color/transparent"
         android:src="@drawable/compass"
         android:layout_gravity="top|end"
+        android:elevation="4dp"
         android:contentDescription="@string/boussole"/>
 
     <com.brewdog.catamap.ui.adapters.MinimapView

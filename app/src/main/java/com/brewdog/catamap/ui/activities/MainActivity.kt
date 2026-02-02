@@ -399,6 +399,10 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             // Afficher l'overlay après chargement des annotations
             withContext(Dispatchers.Main) {
                 showAnnotationOverlay()
+                mapView.postDelayed({
+                    annotationOverlay?.refresh()
+                    Logger.i(TAG, "Annotations refreshed (second attempt)")
+                }, 2000)
             }
         }
 
@@ -469,7 +473,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             supportFragmentManager.beginTransaction()
                 .add(R.id.rootContainer, annotationOverlay!!, "AnnotationOverlay")
                 .commit()
-
+            supportFragmentManager.executePendingTransactions()
             Logger.i(TAG, "AnnotationOverlay created (permanent)")
         }else {
             // SI CETTE BRANCHE S'EXÉCUTE, il y a un problème
@@ -878,9 +882,6 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             exitEditMode()
             return
         }
-
-        // ✅ CORRECTION : NE PLUS CRÉER L'OVERLAY ICI
-        // L'overlay existe déjà (créé au démarrage)
 
         // Créer et ajouter seulement l'overlay des outils
         toolsOverlay = ToolsOverlay.newInstance(currentMap.id, toolsManager, layerManager!!)

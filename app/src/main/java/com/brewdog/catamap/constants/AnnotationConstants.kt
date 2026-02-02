@@ -46,4 +46,13 @@ object AnnotationConstants {
         const val INDICATOR_BAR_HEIGHT_DP = 48
         const val TOOL_BAR_HEIGHT_DP = 72
     }
+    /**
+     * Constantes pour l'outil gomme
+     */
+    object Eraser {
+        const val MIN_ERASER_SIZE = 10f
+        const val MAX_ERASER_SIZE = 50f
+        const val DEFAULT_ERASER_SIZE = 30f
+        const val DETECTION_TOLERANCE = 15f
+    }
 }

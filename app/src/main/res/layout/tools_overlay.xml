@@ -75,6 +75,54 @@
 
         </LinearLayout>
 
+        <!-- Slider taille gomme -->
+        <LinearLayout
+            android:id="@+id/eraserSizeContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:background="#CC000000"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/eraserSizeLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Taille gomme"
+                android:textColor="@android:color/white"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <SeekBar
+                    android:id="@+id/eraserSizeSeekBar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:max="40"
+                    android:progress="20"/>
+
+                <TextView
+                    android:id="@+id/eraserSizeValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="30px"
+                    android:textColor="@android:color/white"
+                    android:textSize="14sp"
+                    android:layout_marginStart="16dp"
+                    android:minWidth="40dp"
+                    android:gravity="end"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
         <!-- Dropdown taille texte -->
         <LinearLayout
             android:id="@+id/textSizeContainer"

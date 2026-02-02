@@ -137,7 +137,7 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     }
 
     private fun initLayerManager() {
-        // ✅ Le LayerManager est déjà initialisé (partagé avec MainActivity)
+        // Le LayerManager est déjà initialisé (partagé avec MainActivity)
         if (!::layerManager.isInitialized) {
             Logger.e(TAG, "LayerManager not provided!")
             return

@@ -26,6 +26,7 @@ class ToolsManager(context: Context) {
         private const val KEY_ACTIVE_COLOR = "active_color"
         private const val KEY_TEXT_SIZE = "text_size"
         private const val KEY_STROKE_WIDTH = "stroke_width"
+        private const val KEY_ERASER_SIZE = "eraser_size"
     }
 
     private val prefs: SharedPreferences =
@@ -36,6 +37,7 @@ class ToolsManager(context: Context) {
     private var _activeColor: Int = loadColor()
     private var _textSize: Int = loadTextSize()
     private var _strokeWidth: Float = loadStrokeWidth()
+    private var _eraserSize: Float = loadEraserSize()
 
     // Calque actif (pour utilisation pendant dessin/texte)
     var activeLayerId: String? = null
@@ -90,6 +92,22 @@ class ToolsManager(context: Context) {
                 saveStrokeWidth(clamped)
                 notifyStrokeWidthChanged()
                 Logger.i(TAG, "Stroke width changed: ${clamped}px")
+            }
+        }
+
+    var eraserSize: Float
+        get() = _eraserSize
+        set(value) {
+            val clamped = value.coerceIn(
+                AnnotationConstants.Eraser.MIN_ERASER_SIZE,
+                AnnotationConstants.Eraser.MAX_ERASER_SIZE
+            )
+
+            if (_eraserSize != clamped) {
+                _eraserSize = clamped
+                saveEraserSize(clamped)
+                notifyEraserSizeChanged()
+                Logger.i(TAG, "Eraser size changed: ${clamped}px")
             }
         }
 
@@ -191,6 +209,12 @@ class ToolsManager(context: Context) {
     private fun saveStrokeWidth(width: Float) {
         prefs.edit().putFloat(KEY_STROKE_WIDTH, width).apply()
     }
+    private fun loadEraserSize(): Float {
+        return prefs.getFloat(KEY_ERASER_SIZE, AnnotationConstants.Eraser.DEFAULT_ERASER_SIZE)
+    }
+    private fun saveEraserSize(size: Float) {
+        prefs.edit().putFloat(KEY_ERASER_SIZE, size).apply()
+    }
 
     // ========== Listeners ==========
 
@@ -223,6 +247,10 @@ class ToolsManager(context: Context) {
         listeners.forEach { it.onStrokeWidthChanged(_strokeWidth) }
     }
 
+    private fun notifyEraserSizeChanged() {
+        listeners.forEach { it.onEraserSizeChanged(_eraserSize) }
+    }
+
     // ========== Debug ==========
 
     fun logState() {
@@ -231,6 +259,7 @@ class ToolsManager(context: Context) {
             "activeColor" to String.format("#%08X", _activeColor),
             "textSize" to "${_textSize}sp",
             "strokeWidth" to "${_strokeWidth}px",
+            "eraserSize" to "${_eraserSize}px",
             "activeLayerId" to (activeLayerId ?: "none"),
             "activeLayerName" to (activeLayerName ?: "none"),
             "navigationLocked" to isNavigationLocked(),
@@ -248,4 +277,5 @@ interface ToolsStateListener {
     fun onColorChanged(color: Int) {}
     fun onTextSizeChanged(size: Int) {}
     fun onStrokeWidthChanged(width: Float) {}
+    fun onEraserSizeChanged(size: Float) {}
 }

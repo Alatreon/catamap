@@ -2,7 +2,9 @@ package com.brewdog.catamap.ui.annotation
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PointF
 import android.graphics.Rect
 import android.os.Bundle
@@ -16,20 +18,17 @@ import com.brewdog.catamap.domain.annotation.LayerChangeListener
 import com.brewdog.catamap.domain.annotation.LayerManager
 import com.brewdog.catamap.domain.annotation.models.AnnotationEdit
 import com.brewdog.catamap.domain.annotation.models.Layer
+import com.brewdog.catamap.domain.annotation.tools.DouglasPeucker
 import com.brewdog.catamap.domain.annotation.tools.ToolType
 import com.brewdog.catamap.domain.annotation.tools.ToolsManager
 import com.brewdog.catamap.domain.annotation.tools.ToolsStateListener
 import com.brewdog.catamap.utils.logging.Logger
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
+import java.util.UUID
 import kotlin.math.sqrt
 
 /**
  * Overlay transparent pour afficher et gérer les annotations
- *
- * VERSION 2.3 - DRAG & DROP :
- * - Tap simple (< 10px) → Édition
- * - Drag (> 10px) → Déplacement
- * - Feedback visuel (semi-transparent pendant drag)
  */
 class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
 
@@ -91,6 +90,7 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
             this.layerManager = this@AnnotationOverlay.layerManager
             this.mapView = this@AnnotationOverlay.mapView
             this.isDarkMode = this@AnnotationOverlay.isDarkMode
+            this.fragmentManager = this@AnnotationOverlay.childFragmentManager
         }
 
         return canvasView
@@ -121,6 +121,12 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
     override fun onTextSizeChanged(size: Int) {
         Logger.d(TAG, "Text size changed: ${size}sp")
         canvasView.invalidate()
+    }
+
+    override fun onStrokeWidthChanged(width: Float) {
+        Logger.d(TAG, "Stroke width changed: ${width}px")
+        // Redessiner si dessin en cours
+        canvasView.onStrokeWidthChanged()
     }
 
     override fun onLayersChanged(layers: List<Layer>, activeLayerId: String) {
@@ -164,6 +170,7 @@ class AnnotationCanvasView(context: Context) : View(context) {
     companion object {
         private const val TAG = "AnnotationCanvasView"
         private const val DRAG_THRESHOLD_DP = 10f
+        private const val SMOOTHING_EPSILON = 2.0f  // Douglas-Peucker tolerance
     }
 
     lateinit var toolsManager: ToolsManager
@@ -174,18 +181,18 @@ class AnnotationCanvasView(context: Context) : View(context) {
     private val renderer = AnnotationRenderer()
     private var currentTool: ToolType = ToolType.NONE
 
-    // Paint pour calcul de bounds
+    // Paint pour calcul de bounds (texte)
     private val measurePaint = Paint().apply {
         isAntiAlias = true
         textAlign = Paint.Align.CENTER
     }
 
-    // État du drag
+    // État du drag (texte)
     private enum class TouchMode {
-        NONE,      // Pas de touch actif
-        WAITING,   // Touch down, en attente
-        DRAGGING,  // Drag en cours
-        EDITING    // Édition (tap simple)
+        NONE,
+        WAITING,
+        DRAGGING,
+        EDITING
     }
 
     private var touchMode = TouchMode.NONE
@@ -194,6 +201,27 @@ class AnnotationCanvasView(context: Context) : View(context) {
     private var dragCurrentPoint: PointF? = null
     private val dragThreshold: Float
         get() = DRAG_THRESHOLD_DP * resources.displayMetrics.density
+
+    // État du dessin
+    private var currentDrawingPoints = mutableListOf<PointF>()
+    private var isDrawing = false
+    private var isErasing = false
+    private var eraserPosition: PointF? = null
+    private var eraserRadius: Float
+        get() = toolsManager.eraserSize
+        set(value) {
+            toolsManager.eraserSize = value
+        }
+
+    // Pour le découpage des dessins
+    private data class PointToRemove(
+        val drawingId: String,
+        val pointIndex: Int
+    )
+    private val pointsToRemove = mutableSetOf<PointToRemove>()
+
+    // FragmentManager pour les dialogs
+    lateinit var fragmentManager: androidx.fragment.app.FragmentManager
 
     init {
         Logger.d(TAG, "AnnotationCanvasView created")
@@ -216,8 +244,8 @@ class AnnotationCanvasView(context: Context) : View(context) {
         val allLayers = layerManager.getLayers()
         val visibleLayers = allLayers.filter { it.isVisible }
 
-        if (visibleLayers.isEmpty()) {
-            Logger.v(TAG, "No visible layers")
+        if (visibleLayers.isEmpty() && !isDrawing) {
+            Logger.v(TAG, "No visible layers and not drawing")
             return
         }
 
@@ -228,6 +256,7 @@ class AnnotationCanvasView(context: Context) : View(context) {
         try {
             applyMapTransformations(canvas)
 
+            // Dessiner annotations existantes
             layers.forEach { layer ->
                 layer.annotations.forEach { annotation ->
                     when (annotation) {
@@ -241,9 +270,17 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 }
             }
 
+            // Dessiner le trait en cours (temporaire)
+            if (isDrawing && currentDrawingPoints.size > 1) {
+                drawTemporaryDrawing(canvas, currentDrawingPoints)
+            }
+            if (isErasing && eraserPosition != null) {
+                drawEraserCursor(canvas, eraserPosition!!)
+            }
+
             val totalAnnotations = layers.sumOf { it.annotations.size }
-            if (totalAnnotations > 0) {
-                Logger.v(TAG, "Drew $totalAnnotations annotations from ${layers.size} visible layers")
+            if (totalAnnotations > 0 || isDrawing) {
+                Logger.v(TAG, "Drew $totalAnnotations annotations from ${layers.size} visible layers (drawing=$isDrawing)")
             }
 
         } finally {
@@ -255,18 +292,40 @@ class AnnotationCanvasView(context: Context) : View(context) {
      * Dessine une annotation texte avec gestion du drag
      */
     private fun drawTextAnnotation(canvas: Canvas, annotation: AnnotationEdit.Text, layer: Layer) {
-        // Vérifier si c'est le texte en cours de drag
         val isDragging = touchMode == TouchMode.DRAGGING &&
                 draggedTextAndLayer?.first?.id == annotation.id
 
         if (isDragging) {
-            // Dessiner à la position du doigt, semi-transparent
             val position = dragCurrentPoint ?: annotation.position
             renderer.drawText(canvas, annotation, isDarkMode, position, alpha = 128)
         } else {
-            // Dessiner normalement
             renderer.drawText(canvas, annotation, isDarkMode)
         }
+    }
+
+    /**
+     * Dessine le trait en cours de dessin (avant lissage)
+     */
+    private fun drawTemporaryDrawing(canvas: Canvas, points: List<PointF>) {
+        val paint = Paint().apply {
+            color = toolsManager.activeColor
+            strokeWidth = toolsManager.strokeWidth
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+            isAntiAlias = true
+            alpha = 255  // Opaque
+        }
+
+        val path = Path()
+        path.moveTo(points[0].x, points[0].y)
+        for (i in 1 until points.size) {
+            path.lineTo(points[i].x, points[i].y)
+        }
+
+        canvas.drawPath(path, paint)
+
+        Logger.v(TAG, "Drew temporary drawing: ${points.size} points")
     }
 
     private fun applyMapTransformations(canvas: Canvas) {
@@ -317,10 +376,10 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 handleTextToolDown(imagePoint)
             }
             ToolType.DRAWING -> {
-                // TODO: Phase 2
+                handleDrawingToolDown(imagePoint)
             }
             ToolType.ERASER -> {
-                // TODO: Phase 3
+                handleEraserToolDown(imagePoint)
             }
             else -> {}
         }
@@ -335,7 +394,10 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 handleTextToolMove(imagePoint)
             }
             ToolType.DRAWING -> {
-                // TODO: Phase 2
+                handleDrawingToolMove(imagePoint)
+            }
+            ToolType.ERASER -> {
+                handleEraserToolMove(imagePoint)
             }
             else -> {}
         }
@@ -345,46 +407,109 @@ class AnnotationCanvasView(context: Context) : View(context) {
         val screenPoint = PointF(event.x, event.y)
         val imagePoint = screenToImageCoordinates(screenPoint)
 
-        Logger.d(TAG, "Touch up: screen=$screenPoint, image=$imagePoint, mode=$touchMode")
+        Logger.d(TAG, "Touch up: screen=$screenPoint, image=$imagePoint, mode=$touchMode, drawing=$isDrawing")
 
         when (currentTool) {
             ToolType.TEXT -> {
                 handleTextToolUp(imagePoint)
             }
             ToolType.DRAWING -> {
-                // TODO: Phase 2
+                handleDrawingToolUp()
+            }
+            ToolType.ERASER -> {
+                handleEraserToolUp()
             }
             else -> {}
         }
 
-        // Reset état
+        // Reset état texte
         touchMode = TouchMode.NONE
         draggedTextAndLayer = null
         dragStartPoint = null
         dragCurrentPoint = null
     }
 
-    private fun screenToImageCoordinates(screenPoint: PointF): PointF {
-        val scale = mapView.scale
-        val center = mapView.center ?: return PointF(0f, 0f)
+    // ========== OUTIL DESSIN ==========
 
-        val viewWidth = width.toFloat()
-        val viewHeight = height.toFloat()
+    /**
+     * Commence un nouveau dessin
+     */
+    private fun handleDrawingToolDown(point: PointF) {
+        currentDrawingPoints.clear()
+        currentDrawingPoints.add(point)
+        isDrawing = true
 
-        val offsetX = viewWidth / 2f - center.x * scale
-        val offsetY = viewHeight / 2f - center.y * scale
-
-        val imageX = (screenPoint.x - offsetX) / scale
-        val imageY = (screenPoint.y - offsetY) / scale
-
-        return PointF(imageX, imageY)
+        Logger.d(TAG, "Drawing started at $point")
     }
 
     /**
-     * Gère le touch down pour l'outil texte
+     * Continue le dessin (ajoute des points)
      */
+    private fun handleDrawingToolMove(point: PointF) {
+        if (isDrawing) {
+            currentDrawingPoints.add(point)
+            invalidate()  // Redessiner en temps réel
+        }
+    }
+
+    /**
+     * Termine le dessin (lissage + sauvegarde)
+     */
+    private fun handleDrawingToolUp() {
+        if (!isDrawing) return
+
+        Logger.d(TAG, "Drawing ended: ${currentDrawingPoints.size} points")
+
+        if (currentDrawingPoints.size >= 2) {
+            // Appliquer lissage Douglas-Peucker
+            val smoothedPoints = DouglasPeucker.simplify(currentDrawingPoints, SMOOTHING_EPSILON)
+
+            val reduction = DouglasPeucker.calculateReduction(
+                currentDrawingPoints.size,
+                smoothedPoints.size
+            )
+
+            Logger.i(TAG, "Drawing smoothed: ${currentDrawingPoints.size} → ${smoothedPoints.size} points (${reduction.toInt()}% reduction)")
+
+            // Créer annotation
+            val drawing = AnnotationEdit.Drawing(
+                points = smoothedPoints,
+                strokeWidth = toolsManager.strokeWidth,
+                color = com.brewdog.catamap.domain.annotation.models.AnnotationColor.fromBaseColor(
+                    toolsManager.activeColor,
+                    isDarkMode
+                )
+            )
+
+            // Ajouter au calque actif
+            val activeLayerId = toolsManager.activeLayerId
+            if (activeLayerId == null) {
+                Logger.e(TAG, "No active layer")
+            } else {
+                val activeLayer = layerManager.getLayers().find { it.id == activeLayerId }
+                if (activeLayer == null) {
+                    Logger.e(TAG, "Active layer not found: $activeLayerId")
+                } else {
+                    activeLayer.addAnnotation(drawing)
+                    Logger.i(TAG, "Drawing annotation created: ${smoothedPoints.size} points on layer ${activeLayer.name}")
+
+                    // Sauvegarder
+                    layerManager.saveAnnotations()
+                }
+            }
+        } else {
+            Logger.d(TAG, "Drawing ignored: not enough points (${currentDrawingPoints.size})")
+        }
+
+        // Reset état dessin
+        isDrawing = false
+        currentDrawingPoints.clear()
+        invalidate()
+    }
+
+    // ========== OUTIL TEXTE ==========
+
     private fun handleTextToolDown(imagePoint: PointF) {
-        // Vérifier si on a tapé sur un texte existant
         val tappedText = findTextAnnotationAtPoint(imagePoint)
 
         if (tappedText != null) {
@@ -392,14 +517,12 @@ class AnnotationCanvasView(context: Context) : View(context) {
             val activeLayerId = toolsManager.activeLayerId
 
             if (layer.id == activeLayerId) {
-                // Texte sur calque actif → Préparer pour drag ou édition
                 touchMode = TouchMode.WAITING
                 draggedTextAndLayer = tappedText
                 dragStartPoint = imagePoint
 
                 Logger.d(TAG, "Touch down on text: \"${text.content}\", waiting for move or up")
             } else {
-                // Texte sur autre calque → Toast
                 Toast.makeText(
                     context,
                     "Ce texte est sur un autre calque (${layer.name})",
@@ -410,21 +533,15 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 Logger.d(TAG, "Text on inactive layer: ${layer.name}")
             }
         } else {
-            // Pas de texte trouvé → Création
             touchMode = TouchMode.NONE
         }
     }
 
-    /**
-     * Gère le move pour l'outil texte
-     */
     private fun handleTextToolMove(imagePoint: PointF) {
         if (touchMode == TouchMode.WAITING) {
-            // Vérifier si on a dépassé le seuil de drag
             val distance = calculateDistance(dragStartPoint!!, imagePoint)
 
             if (distance > dragThreshold) {
-                // Passer en mode drag
                 touchMode = TouchMode.DRAGGING
                 dragCurrentPoint = imagePoint
 
@@ -434,31 +551,24 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 invalidate()
             }
         } else if (touchMode == TouchMode.DRAGGING) {
-            // Mettre à jour la position du drag
             dragCurrentPoint = imagePoint
             invalidate()
         }
     }
 
-    /**
-     * Gère le touch up pour l'outil texte
-     */
     private fun handleTextToolUp(imagePoint: PointF) {
         when (touchMode) {
             TouchMode.WAITING -> {
-                // Tap simple → Édition
                 val (text, layer) = draggedTextAndLayer!!
                 Logger.i(TAG, "Tap detected, opening edit dialog for: \"${text.content}\"")
                 showTextEditDialog(text.position, text)
             }
 
             TouchMode.DRAGGING -> {
-                // Fin du drag → Sauvegarder nouvelle position
                 saveDraggedTextPosition(imagePoint)
             }
 
             TouchMode.NONE -> {
-                // Création d'un nouveau texte
                 Logger.d(TAG, "Creating new text at $imagePoint")
                 showTextEditDialog(imagePoint, null)
             }
@@ -467,20 +577,14 @@ class AnnotationCanvasView(context: Context) : View(context) {
         }
     }
 
-    /**
-     * Sauvegarde la nouvelle position du texte après drag
-     */
     private fun saveDraggedTextPosition(newPosition: PointF) {
         val (text, layer) = draggedTextAndLayer ?: return
 
-        // Créer annotation mise à jour
         val updatedText = text.copy(position = newPosition)
 
-        // Remplacer dans le calque
         layer.removeAnnotation(text.id)
         layer.addAnnotation(updatedText)
 
-        // Sauvegarder
         layerManager.saveAnnotations()
 
         Logger.i(TAG, "Text moved: \"${text.content}\" from ${text.position} to $newPosition")
@@ -488,23 +592,16 @@ class AnnotationCanvasView(context: Context) : View(context) {
         invalidate()
     }
 
-    /**
-     * Calcule la distance entre deux points
-     */
     private fun calculateDistance(p1: PointF, p2: PointF): Float {
         val dx = p2.x - p1.x
         val dy = p2.y - p1.y
         return sqrt(dx * dx + dy * dy)
     }
 
-    /**
-     * Trouve une annotation texte au point donné
-     */
     private fun findTextAnnotationAtPoint(point: PointF): Pair<AnnotationEdit.Text, Layer>? {
         val allLayers = layerManager.getLayers()
         val visibleLayers = allLayers.filter { it.isVisible }.sortedBy { it.zIndex }
 
-        // Parcourir du plus haut au plus bas
         for (layer in visibleLayers.reversed()) {
             for (annotation in layer.annotations.reversed()) {
                 if (annotation is AnnotationEdit.Text) {
@@ -520,9 +617,6 @@ class AnnotationCanvasView(context: Context) : View(context) {
         return null
     }
 
-    /**
-     * Vérifie si un point est dans les bounds d'un texte
-     */
     private fun isPointInTextBounds(point: PointF, annotation: AnnotationEdit.Text): Boolean {
         measurePaint.textSize = annotation.fontSize
 
@@ -544,6 +638,22 @@ class AnnotationCanvasView(context: Context) : View(context) {
         }
 
         return isInside
+    }
+
+    private fun screenToImageCoordinates(screenPoint: PointF): PointF {
+        val scale = mapView.scale
+        val center = mapView.center ?: return PointF(0f, 0f)
+
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+
+        val offsetX = viewWidth / 2f - center.x * scale
+        val offsetY = viewHeight / 2f - center.y * scale
+
+        val imageX = (screenPoint.x - offsetX) / scale
+        val imageY = (screenPoint.y - offsetY) / scale
+
+        return PointF(imageX, imageY)
     }
 
     private fun showTextEditDialog(position: PointF, existingText: AnnotationEdit.Text?) {
@@ -581,13 +691,10 @@ class AnnotationCanvasView(context: Context) : View(context) {
         }
 
         if (existingText != null) {
-            // Édition
             if (text.isBlank()) {
-                // Supprimer
                 activeLayer.removeAnnotation(existingText.id)
                 Logger.i(TAG, "Text annotation deleted: \"${existingText.content}\"")
             } else {
-                // Mettre à jour
                 val updatedText = existingText.copy(content = text)
                 activeLayer.removeAnnotation(existingText.id)
                 activeLayer.addAnnotation(updatedText)
@@ -598,7 +705,6 @@ class AnnotationCanvasView(context: Context) : View(context) {
             invalidate()
 
         } else {
-            // Création
             if (text.isBlank()) {
                 Logger.d(TAG, "Empty text, ignoring")
                 return
@@ -625,5 +731,231 @@ class AnnotationCanvasView(context: Context) : View(context) {
     fun onToolChanged(tool: ToolType) {
         currentTool = tool
         Logger.d(TAG, "Current tool: $tool")
+
+        // Si on change d'outil pendant un dessin, l'annuler
+        if (isDrawing && tool != ToolType.DRAWING) {
+            Logger.w(TAG, "Drawing cancelled: tool changed")
+            isDrawing = false
+            currentDrawingPoints.clear()
+            invalidate()
+        }
+        // Annuler gomme en cours
+        if (isErasing && tool != ToolType.ERASER) {
+            Logger.w(TAG, "Erasing cancelled: tool changed")
+            isErasing = false
+            eraserPosition = null
+            pointsToRemove.clear()
+            invalidate()
+        }
+    }
+
+    fun onStrokeWidthChanged() {
+        // Redessiner si dessin en cours
+        if (isDrawing) {
+            invalidate()
+        }
+    }
+    // ========== OUTIL GOMME ==========
+
+    /**
+     * Gère le down pour l'outil gomme
+     */
+    private fun handleEraserToolDown(point: PointF) {
+        isErasing = true
+        eraserPosition = point
+
+        // Vérifier si on tape sur un texte
+        val tappedText = findTextAnnotationAtPoint(point)
+        if (tappedText != null) {
+            val (text, layer) = tappedText
+            val activeLayerId = toolsManager.activeLayerId
+
+            if (layer.id == activeLayerId) {
+                // Texte sur calque actif → Dialog de confirmation
+                showEraseTextDialog(text, layer)
+                Logger.d(TAG, "Eraser tapped on text: \"${text.content}\"")
+            } else {
+                Toast.makeText(
+                    context,
+                    "Ce texte est sur un autre calque (${layer.name})",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            isErasing = false
+            eraserPosition = null
+            return
+        }
+
+        // Marquer les points de dessin à supprimer
+        checkAndMarkPointsForRemoval(point)
+        invalidate()
+
+        Logger.d(TAG, "Eraser started at $point")
+    }
+
+    /**
+     * Gère le move pour l'outil gomme
+     */
+    private fun handleEraserToolMove(point: PointF) {
+        if (isErasing) {
+            eraserPosition = point
+            checkAndMarkPointsForRemoval(point)
+            invalidate()
+        }
+    }
+
+    /**
+     * Gère le up pour l'outil gomme
+     */
+    private fun handleEraserToolUp() {
+        if (!isErasing) return
+
+        // Appliquer la suppression des points marqués
+        if (pointsToRemove.isNotEmpty()) {
+            applyErasure()
+            Logger.i(TAG, "Eraser applied: ${pointsToRemove.size} points removed")
+        }
+
+        isErasing = false
+        eraserPosition = null
+        pointsToRemove.clear()
+        invalidate()
+    }
+
+    /**
+     * Vérifie et marque les points de dessin à supprimer
+     */
+    private fun checkAndMarkPointsForRemoval(eraserCenter: PointF) {
+        val activeLayerId = toolsManager.activeLayerId ?: return
+        val activeLayer = layerManager.getLayers().find { it.id == activeLayerId } ?: return
+
+        activeLayer.annotations.forEach { annotation ->
+            if (annotation is AnnotationEdit.Drawing) {
+                annotation.points.forEachIndexed { index, point ->
+                    val distance = calculateDistance(eraserCenter, point)
+                    if (distance <= eraserRadius) {
+                        pointsToRemove.add(PointToRemove(annotation.id, index))
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Applique la suppression des points marqués et découpe les dessins
+     */
+    private fun applyErasure() {
+        val activeLayerId = toolsManager.activeLayerId ?: return
+        val activeLayer = layerManager.getLayers().find { it.id == activeLayerId } ?: return
+
+        // Grouper les points par dessin
+        val pointsByDrawing = pointsToRemove.groupBy { it.drawingId }
+
+        pointsByDrawing.forEach { (drawingId, removedPoints) ->
+            val drawing = activeLayer.annotations
+                .filterIsInstance<AnnotationEdit.Drawing>()
+                .find { it.id == drawingId }
+
+            if (drawing != null) {
+                val removedIndices = removedPoints.map { it.pointIndex }.toSet()
+
+                // Découper le dessin en segments
+                val newDrawings = splitDrawing(drawing, removedIndices)
+
+                // Supprimer l'ancien dessin
+                activeLayer.removeAnnotation(drawingId)
+
+                // Ajouter les nouveaux segments
+                newDrawings.forEach { newDrawing ->
+                    activeLayer.addAnnotation(newDrawing)
+                }
+
+                Logger.i(TAG, "Drawing split: 1 → ${newDrawings.size} segments")
+            }
+        }
+
+        // Sauvegarder
+        layerManager.saveAnnotations()
+    }
+
+    /**
+     * Découpe un dessin en segments séparés
+     */
+    private fun splitDrawing(
+        drawing: AnnotationEdit.Drawing,
+        removedIndices: Set<Int>
+    ): List<AnnotationEdit.Drawing> {
+        val segments = mutableListOf<MutableList<PointF>>()
+        var currentSegment = mutableListOf<PointF>()
+
+        drawing.points.forEachIndexed { index, point ->
+            if (!removedIndices.contains(index)) {
+                // Point conservé
+                currentSegment.add(point)
+            } else {
+                // Point supprimé, terminer le segment actuel
+                if (currentSegment.size >= 2) {
+                    segments.add(currentSegment)
+                }
+                currentSegment = mutableListOf()
+            }
+        }
+
+        // Dernier segment
+        if (currentSegment.size >= 2) {
+            segments.add(currentSegment)
+        }
+
+        // Créer les nouveaux dessins
+        return segments.map { pointsList ->
+            drawing.copy(
+                id = UUID.randomUUID().toString(),
+                points = pointsList
+            )
+        }
+    }
+
+    /**
+     * Affiche le dialog de confirmation pour supprimer un texte
+     */
+    private fun showEraseTextDialog(text: AnnotationEdit.Text, layer: Layer) {
+        val dialog = EraseTextConfirmDialog.newInstance(
+            textContent = text.content,
+            onConfirm = {
+                // Supprimer le texte
+                layer.removeAnnotation(text.id)
+                layerManager.saveAnnotations()
+                invalidate()
+
+                Logger.i(TAG, "Text erased: \"${text.content}\" from layer ${layer.name}")
+            }
+        )
+
+        dialog.show(fragmentManager, "EraseTextConfirmDialog")
+    }
+
+    /**
+     * Dessine le curseur de gomme (cercle outline rouge)
+     */
+    private fun drawEraserCursor(canvas: Canvas, position: PointF) {
+        val paint = Paint().apply {
+            color = Color.RED
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+            isAntiAlias = true
+        }
+
+        canvas.drawCircle(position.x, position.y, eraserRadius, paint)
+    }
+
+    /**
+     * Listener pour changement taille gomme
+     */
+    fun onEraserSizeChanged() {
+        // Redessiner si gomme en cours
+        if (isErasing) {
+            invalidate()
+        }
     }
 }

@@ -52,7 +52,7 @@ class AnnotationRenderer {
         // Configurer le paint
         textPaint.color = color
         textPaint.textSize = annotation.fontSize
-        textPaint.alpha = alpha  // ✅ Support de l'alpha pour drag
+        textPaint.alpha = alpha
 
         // Position à utiliser
         val drawPosition = position ?: annotation.position

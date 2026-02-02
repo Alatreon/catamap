@@ -76,9 +76,13 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
     private lateinit var iconToolColor: ImageView
     private lateinit var iconToolEraser: ImageView
     private lateinit var iconToolClose: ImageView
-
+    private lateinit var eraserSizeSeekBar: SeekBar  // ← NOUVEAU
+    private lateinit var eraserSizeLabel: TextView
+    private lateinit var eraserSizeContainer: LinearLayout
+    private lateinit var eraserSizeValue: TextView
     // État
     private var isVisible = false
+
 
     // Callback pour gérer le bouton Retour
     private lateinit var backPressedCallback: OnBackPressedCallback
@@ -135,6 +139,10 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         contextualParametersContainer = view.findViewById(R.id.contextualParametersContainer)
         strokeWidthContainer = view.findViewById(R.id.strokeWidthContainer)
         strokeWidthSeekBar = view.findViewById(R.id.strokeWidthSeekBar)
+        eraserSizeSeekBar = view.findViewById(R.id.eraserSizeSeekBar)
+        eraserSizeLabel = view.findViewById(R.id.eraserSizeLabel)
+        eraserSizeContainer = view.findViewById(R.id.eraserSizeContainer)
+        eraserSizeValue = view.findViewById(R.id.eraserSizeValue)
         strokeWidthValue = view.findViewById(R.id.strokeWidthValue)
         textSizeContainer = view.findViewById(R.id.textSizeContainer)
         textSizeSpinner = view.findViewById(R.id.textSizeSpinner)
@@ -184,11 +192,11 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         btnToolClose.setOnClickListener { onCloseClicked() }
 
         // Slider épaisseur
-        strokeWidthSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        eraserSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    val width = progress + 1f // 0-19 → 1-20
-                    toolsManager.strokeWidth = width
+                    toolsManager.eraserSize = (progress + 10).toFloat() // 0-40 → 10-50
+                    updateEraserSizeDisplay()
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -346,7 +354,6 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
 
     private fun updateContextualParameters() {
         val tool = toolsManager.activeTool
-
         when (tool) {
             ToolType.TEXT -> {
                 contextualParametersContainer.visibility = View.VISIBLE
@@ -357,7 +364,22 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
                 contextualParametersContainer.visibility = View.VISIBLE
                 textSizeContainer.visibility = View.GONE
                 strokeWidthContainer.visibility = View.VISIBLE
+                strokeWidthSeekBar.visibility = View.VISIBLE
+                eraserSizeSeekBar.visibility = View.GONE
+                eraserSizeLabel.visibility = View.GONE
                 updateStrokeWidthDisplay()
+            }
+            ToolType.ERASER -> {
+                contextualParametersContainer.visibility = View.VISIBLE
+                textSizeContainer.visibility = View.GONE
+                strokeWidthContainer.visibility = View.VISIBLE
+                strokeWidthSeekBar.visibility = View.GONE
+                eraserSizeSeekBar.visibility = View.VISIBLE
+                eraserSizeLabel.visibility = View.VISIBLE
+
+                // Synchroniser avec la valeur actuelle
+                eraserSizeSeekBar.progress = toolsManager.eraserSize.toInt()
+                updateEraserSizeDisplay()
             }
             else -> {
                 contextualParametersContainer.visibility = View.GONE
@@ -372,6 +394,13 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         strokeWidthSeekBar.progress = (width - 1).toInt() // 1-20 → 0-19
         strokeWidthValue.text = "${width.toInt()}px"
     }
+
+    private fun updateEraserSizeDisplay() {
+        val size = toolsManager.eraserSize
+        eraserSizeSeekBar.progress = (size - 10).toInt() // 10-50 → 0-40
+        eraserSizeValue.text = "${size.toInt()}px"
+    }
+
 
     // ========== ToolsStateListener ==========
 
