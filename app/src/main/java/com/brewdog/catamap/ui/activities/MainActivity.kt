@@ -1,6 +1,7 @@
 package com.brewdog.catamap.ui.activities
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.graphics.PointF
 import android.os.Bundle
@@ -15,9 +16,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import com.brewdog.catamap.R
 import com.brewdog.catamap.constants.AppConstants
+import com.brewdog.catamap.data.models.MapItem
 import com.brewdog.catamap.data.repository.AnnotationRepository
 import com.brewdog.catamap.data.repository.MapRepository
 import com.brewdog.catamap.domain.annotation.LayerManager
@@ -32,8 +33,12 @@ import com.brewdog.catamap.utils.logging.Logger
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import com.brewdog.catamap.ui.annotation.EditBottomSheet
 import com.brewdog.catamap.domain.annotation.tools.ToolsManager
+import com.brewdog.catamap.ui.annotation.AnnotationOverlay
 import com.brewdog.catamap.ui.annotation.tools.ToolsOverlay
 import com.brewdog.catamap.ui.annotation.tools.ToolsOverlayListener
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
 
@@ -56,6 +61,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
     // Repository
     private lateinit var repository: MapRepository
+    private lateinit var annotationRepository: AnnotationRepository
 
     // Controllers
     private lateinit var mapViewController: MapViewController
@@ -82,6 +88,8 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     private var layerManager: LayerManager? = null
     // Sauvegarde de l'état avant mode édition
     private var preEditState: PreEditState? = null
+    private var annotationOverlay: AnnotationOverlay? = null
+    private var isDarkMode: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -133,8 +141,9 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         Logger.entry(TAG, "initRepository")
 
         repository = MapRepository(this)
+        annotationRepository = AnnotationRepository(this)  // ← NOUVEAU
 
-        Logger.i(TAG, "Repository initialized")
+        Logger.i(TAG, "Repositories initialized")
         Logger.exit(TAG, "initRepository")
     }
 
@@ -250,6 +259,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
         mapView.setOnStateChangedListener(object : SubsamplingScaleImageView.OnStateChangedListener {
             override fun onScaleChanged(newScale: Float, origin: Int) {
+                annotationOverlay?.refresh()
                 // Appelé pendant zoom (pinch, double-tap, etc.)
                 if (minimapEnabled) {
                     minimapController.updateViewport()
@@ -257,6 +267,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             }
 
             override fun onCenterChanged(newCenter: PointF?, origin: Int) {
+                annotationOverlay?.refresh()
                 // Appelé pendant pan (déplacement)
                 if (minimapEnabled) {
                     minimapController.updateViewport()
@@ -381,6 +392,17 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         mapLoader.startLoading(map)
         mapViewController.loadMap(map, darkMode = true)
 
+        layerManager = LayerManager(annotationRepository, lifecycleScope)
+        lifecycleScope.launch {
+            layerManager!!.loadAnnotations(map.id)
+
+            // Afficher l'overlay après chargement des annotations
+            withContext(Dispatchers.Main) {
+                showAnnotationOverlay()
+            }
+        }
+
+
         Logger.exit(TAG, "loadInitialMap")
     }
 
@@ -415,6 +437,48 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         Logger.exit(TAG, "loadMinimapForCurrentMap")
     }
 
+    /**
+     * Affiche l'overlay d'annotations (permanent)
+     * Appelé une seule fois au chargement de la carte
+     */
+    private fun showAnnotationOverlay() {
+        Logger.entry(TAG, "showAnnotationOverlay")
+        Logger.d(TAG, "annotationOverlay is null: ${annotationOverlay == null}")
+        val currentMap = mapViewController.getCurrentMap()
+        if (currentMap == null) {
+            Logger.w(TAG, "No map to show annotations for")
+            return
+        }
+
+        if (layerManager == null) {
+            Logger.e(TAG, "LayerManager not available")
+            return
+        }
+
+        // Ne créer l'overlay qu'une seule fois
+        if (annotationOverlay == null) {
+            annotationOverlay = AnnotationOverlay.newInstance(
+                mapId = currentMap.id,
+                isDarkMode = mapViewController.isDarkModeEnabled(),
+                toolsManager = toolsManager,
+                layerManager = layerManager!!,
+                mapView = mapView
+            )
+
+            // Ajouter AVANT loadingOverlay pour que le loader soit par-dessus
+            supportFragmentManager.beginTransaction()
+                .add(R.id.rootContainer, annotationOverlay!!, "AnnotationOverlay")
+                .commit()
+
+            Logger.i(TAG, "AnnotationOverlay created (permanent)")
+        }else {
+            // SI CETTE BRANCHE S'EXÉCUTE, il y a un problème
+            Logger.w(TAG, "AnnotationOverlay already exists, skipping creation")
+        }
+
+        Logger.exit(TAG, "showAnnotationOverlay")
+    }
+
     // ========== MENU ACTIONS ==========
 
     private fun toggleCompassLock() {
@@ -446,6 +510,9 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         Logger.entry(TAG, "toggleDarkMode")
 
         val newMode = !mapViewController.isDarkModeEnabled()
+
+        annotationOverlay?.updateDarkMode(newMode)
+
 
         Logger.i(TAG, "Toggling dark mode: ${mapViewController.isDarkModeEnabled()} → $newMode")
 
@@ -584,6 +651,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             Logger.i(TAG, "LayerManager cleaned up")
         }
         layerManager = null
+        annotationRepository.cleanup()
 
         try {
             compassManager.unregister()
@@ -613,12 +681,48 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             val database = repository.loadDatabase()
             val map = database.getMapById(selectedMapId)
             if (map != null) {
-                mapLoader.startLoading(map)
-                mapViewController.loadMap(map, mapViewController.isDarkModeEnabled())
+                loadNewMap(map)
             }
         }
 
         Logger.exit(TAG, "onNewIntent")
+    }
+
+    /**
+     * Charge une nouvelle carte
+     * Gère le cleanup des annotations de l'ancienne carte
+     */
+    private fun loadNewMap(map: MapItem) {
+        Logger.entry(TAG, "loadNewMap", map.name)
+
+        // 1. Supprimer l'overlay actuel
+        annotationOverlay?.let { overlay ->
+            supportFragmentManager.beginTransaction()
+                .remove(overlay)
+                .commit()
+        }
+        annotationOverlay = null
+
+        // 2. Cleanup LayerManager
+        layerManager?.cleanup()
+        layerManager = null
+
+        // 3. Charger la nouvelle carte
+        mapLoader.startLoading(map)
+        mapViewController.loadMap(map, mapViewController.isDarkModeEnabled())
+
+        // 4. Créer nouveau LayerManager
+        layerManager = LayerManager(annotationRepository, lifecycleScope)
+        lifecycleScope.launch {
+            layerManager!!.loadAnnotations(map.id)
+
+            // 5. Créer nouvel overlay
+            withContext(Dispatchers.Main) {
+                showAnnotationOverlay()
+            }
+        }
+
+        Logger.i(TAG, "New map loaded with annotations")
     }
 
     private fun setupMinimapSize() {
@@ -670,23 +774,18 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     private fun showEditBottomSheet(mapId: String) {
         Logger.entry(TAG, "showEditBottomSheet", mapId)
 
-        // Fermer l'ancien Bottom Sheet si existant
         editBottomSheet?.dismiss()
 
-        // Créer et afficher le nouveau
-        editBottomSheet = EditBottomSheet.newInstance(mapId)
+        // Passer le LayerManager existant au EditBottomSheet
+        if (layerManager == null) {
+            Logger.e(TAG, "LayerManager not available")
+            return
+        }
+
+        editBottomSheet = EditBottomSheet.newInstance(mapId, layerManager!!)
         editBottomSheet!!.show(supportFragmentManager, "EditBottomSheet")
 
-        // Récupérer le LayerManager APRÈS que l'EditBottomSheet soit créé
-        editBottomSheet!!.lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) {
-                // Le LayerManager est maintenant initialisé
-                layerManager = editBottomSheet?.getLayerManager()
-                Logger.d(TAG, "LayerManager récupéré de EditBottomSheet")
-            }
-        })
-
-        Logger.i(TAG, "Edit bottom sheet shown")
+        Logger.i(TAG, "Edit bottom sheet shown with shared LayerManager")
     }
 
     override fun onToolsOverlayClosed() {
@@ -705,8 +804,11 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     /**
      * Affiche l'overlay des outils
      */
-    fun showToolsOverlay() {
+    /*fun showToolsOverlay() {
         Logger.entry(TAG, "showToolsOverlay")
+        // AJOUTER CE LOG
+        Logger.d(TAG, "annotationOverlay before: $annotationOverlay")
+
 
         val currentMap = mapViewController.getCurrentMap()
         if (currentMap == null) {
@@ -714,16 +816,13 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             return
         }
 
-        // Vérifier que le LayerManager existe
         if (layerManager == null) {
             Logger.e(TAG, "LayerManager not available")
             return
         }
 
-        // Entrer en mode édition
         enterEditMode()
 
-        // Vérifier qu'il y a un calque actif
         val activeLayer = layerManager!!.getActiveLayer()
         if (activeLayer == null) {
             Logger.w(TAG, "No active layer available")
@@ -731,15 +830,68 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             return
         }
 
-        // Afficher l'overlay avec le LayerManager existant
+        // Créer l'overlay d'annotations
+        annotationOverlay = AnnotationOverlay.newInstance(
+            mapId = currentMap.id,
+            isDarkMode = mapViewController.isDarkModeEnabled(),
+            toolsManager = toolsManager,
+            layerManager = layerManager!!,
+            mapView = mapView
+        )
+
+        // Ajouter l'overlay d'annotations au rootContainer
+        supportFragmentManager.beginTransaction()
+            .add(R.id.rootContainer, annotationOverlay!!, "AnnotationOverlay")
+            .commit()
+
+        // Créer et ajouter l'overlay des outils
         toolsOverlay = ToolsOverlay.newInstance(currentMap.id, toolsManager, layerManager!!)
 
         supportFragmentManager.beginTransaction()
-            .add(android.R.id.content, toolsOverlay!!, "ToolsOverlay")
+            .add(R.id.rootContainer, toolsOverlay!!, "ToolsOverlay")
             .commit()
 
-        Logger.i(TAG, "Tools overlay shown with active layer: ${activeLayer.name}")
+        Logger.i(TAG, "Tools overlay and annotation overlay shown")
+    }*/
+    fun showToolsOverlay() {
+        Logger.entry(TAG, "showToolsOverlay")
+
+        // AJOUTER CE LOG
+        Logger.d(TAG, "annotationOverlay before: $annotationOverlay")
+
+        val currentMap = mapViewController.getCurrentMap()
+        if (currentMap == null) {
+            Logger.w(TAG, "No map loaded")
+            return
+        }
+
+        if (layerManager == null) {
+            Logger.e(TAG, "LayerManager not available")
+            return
+        }
+
+        enterEditMode()
+
+        val activeLayer = layerManager!!.getActiveLayer()
+        if (activeLayer == null) {
+            Logger.w(TAG, "No active layer available")
+            exitEditMode()
+            return
+        }
+
+        // ✅ CORRECTION : NE PLUS CRÉER L'OVERLAY ICI
+        // L'overlay existe déjà (créé au démarrage)
+
+        // Créer et ajouter seulement l'overlay des outils
+        toolsOverlay = ToolsOverlay.newInstance(currentMap.id, toolsManager, layerManager!!)
+
+        supportFragmentManager.beginTransaction()
+            .add(R.id.rootContainer, toolsOverlay!!, "ToolsOverlay")
+            .commit()
+
+        Logger.i(TAG, "Tools overlay shown (annotations already visible)")
     }
+
 
 
 
@@ -751,24 +903,21 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     fun hideToolsOverlay() {
         Logger.entry(TAG, "hideToolsOverlay")
 
+        // Fermer seulement ToolsOverlay
         toolsOverlay?.let { overlay ->
             supportFragmentManager.beginTransaction()
                 .remove(overlay)
                 .commit()
-            toolsOverlay = null
-
-            // Désactiver l'outil actif
-            toolsManager.clearTool()
-
-            Logger.i(TAG, "Tools overlay hidden")
         }
+        toolsOverlay = null
 
-        // NE PAS mettre layerManager = null ici !
-        // Il sera réutilisé par le prochain EditBottomSheet
+        toolsManager.clearTool()
 
-        // Sortir du mode édition
+        Logger.i(TAG, "Tools hidden, annotations still visible")
+
         exitEditMode()
     }
+
 
     /**
      * Entre en mode édition
@@ -861,6 +1010,11 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         preEditState = null
 
         Logger.i(TAG, "Edit mode exited")
+    }
+
+    private fun getCurrentDarkMode(): Boolean {
+        val sharedPrefs = getSharedPreferences("map_settings", Context.MODE_PRIVATE)
+        return sharedPrefs.getBoolean("is_dark_mode", false)
     }
 
 }

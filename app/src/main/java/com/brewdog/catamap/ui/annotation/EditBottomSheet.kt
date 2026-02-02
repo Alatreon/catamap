@@ -39,11 +39,12 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         private const val TAG = "EditBottomSheet"
         private const val ARG_MAP_ID = "map_id"
 
-        fun newInstance(mapId: String): EditBottomSheet {
+        fun newInstance(mapId: String, layerManager: LayerManager): EditBottomSheet {
             return EditBottomSheet().apply {
                 arguments = Bundle().apply {
                     putString(ARG_MAP_ID, mapId)
                 }
+                this.layerManager = layerManager  // ← Utiliser le LayerManager partagé
             }
         }
     }
@@ -136,11 +137,14 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     }
 
     private fun initLayerManager() {
-        val repository = AnnotationRepository(requireContext())
-        layerManager = LayerManager(repository, lifecycleScope)
-        layerManager.addListener(this)
+        // ✅ Le LayerManager est déjà initialisé (partagé avec MainActivity)
+        if (!::layerManager.isInitialized) {
+            Logger.e(TAG, "LayerManager not provided!")
+            return
+        }
 
-        Logger.d(TAG, "LayerManager initialized")
+        layerManager.addListener(this)
+        Logger.d(TAG, "LayerManager shared from MainActivity")
     }
 
     private fun initRecyclerView() {
@@ -265,15 +269,28 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         val result = layerManager.toggleLayerVisibility(layer.id)
 
         result.onSuccess {
-            val status = if (layer.isVisible) "visible" else "masqué"
-            showFeedback("Calque $status")
+            // Récupérer le nouvel état depuis le layer
+            val updatedLayer = layerManager.getLayers().find { it.id == layer.id }
+            val newVisibility = updatedLayer?.isVisible ?: false
+
+            val message = if (newVisibility) {
+                "Calque \"${layer.name}\" affiché"
+            } else {
+                "Calque \"${layer.name}\" masqué"
+            }
+            showFeedback(message)
+
+            Logger.i(TAG, "Layer ${layer.name} visibility: $newVisibility")
+
+            // Mettre à jour l'état du bouton outils
+            updateToolsButtonState()
         }.onFailure { error ->
-            Logger.w(TAG, "Failed to toggle visibility", error)
+            Logger.e(TAG, "Failed to toggle visibility", error)
             showFeedback(error.message ?: "Erreur")
         }
-
-        updateToolsButtonState()
     }
+
+
 
     private fun onDeleteLayer(layer: Layer) {
         Logger.entry(TAG, "onDeleteLayer", layer.name)
