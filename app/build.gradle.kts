@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.subsampling)
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("com.google.android.material:material:1.11.0")
+    implementation("com.github.skydoves:colorpickerview:2.3.0")
 
     // KTX extensions (si pas déjà dans libs)
     implementation("androidx.core:core-ktx:1.12.0")
