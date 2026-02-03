@@ -285,6 +285,8 @@ class MapViewController(
     fun loadMap(map: MapItem, darkMode: Boolean) {
         Logger.entry(TAG, "loadMap", map.id, map.name, darkMode)
 
+        val isNewMap = currentMap?.id != map.id
+
         currentMap = map
         isDarkMode = darkMode
 
@@ -311,6 +313,36 @@ class MapViewController(
         try {
             mapView.setImage(imageSource)
             Logger.i(TAG, "Image loading started for map: ${map.name} (${if (darkMode) "dark" else "light"} mode)")
+            // Ajouter listener pour nouvelle carte OU mode switch
+            if (isNewMap || isModeSwitching) {
+                mapView.setOnImageEventListener(object : SubsamplingScaleImageView.OnImageEventListener {
+                    override fun onReady() {
+                        if (isNewMap) {
+                            val currentScale = mapView.scale
+                            centerMap(currentScale)
+                        }
+
+                        if (isModeSwitching) {
+                            mapState.apply(mapView, animated = false)
+                            isModeSwitching = false
+                            Logger.i(TAG, "Map state restored after mode switch")
+                        }
+
+                        // Appeler le callback
+                        onMapReady?.invoke()
+                        Logger.d(TAG, "onMapReady called")
+
+                        // Retirer le listener
+                        mapView.setOnImageEventListener(null)
+                    }
+
+                    override fun onImageLoaded() {}
+                    override fun onPreviewLoadError(e: Exception?) {}
+                    override fun onImageLoadError(e: Exception?) {}
+                    override fun onTileLoadError(e: Exception?) {}
+                    override fun onPreviewReleased() {}
+                })
+            }
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to load image", e)
             onMapLoadError?.invoke(e)

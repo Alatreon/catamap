@@ -14,8 +14,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
 import com.brewdog.catamap.R
 import com.brewdog.catamap.constants.AppConstants
 import com.brewdog.catamap.data.models.MapItem
@@ -520,7 +518,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
         Logger.i(TAG, "Toggling dark mode: ${mapViewController.isDarkModeEnabled()} → $newMode")
 
-        loadingOverlay.visibility = android.view.View.VISIBLE
+        loadingOverlay.visibility = View.VISIBLE
         loadingOverlay.alpha = 1f
 
         val originalOnMapReady = mapViewController.onMapReady
@@ -530,7 +528,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
                 .alpha(0f)
                 .setDuration(100)
                 .withEndAction {
-                    loadingOverlay.visibility = android.view.View.GONE
+                    loadingOverlay.visibility = View.GONE
                 }
                 .start()
 
@@ -597,7 +595,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             // MODE ÉCONOMIE ACTIVÉ
             rotateWithCompass = false
             manualRotateEnabled = false
-            compassView.visibility = android.view.View.GONE
+            compassView.visibility = View.GONE
             compassManager.unregister()
             mapViewController.setRotation(0f, false)
             mapViewController.setRotationEnabled(false)
@@ -610,7 +608,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             manualRotateEnabled = false
             compassManager.setRotateWithCompass(false)
             compassManager.setBatterySaverEnabled(false)
-            compassView.visibility = android.view.View.VISIBLE
+            compassView.visibility = View.VISIBLE
             compassManager.register()
 
             Logger.i(TAG, "Battery saver DISABLED: compass on")

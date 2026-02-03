@@ -191,7 +191,19 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         btnToolEraser.setOnClickListener { onToolClicked(ToolType.ERASER) }
         btnToolClose.setOnClickListener { onCloseClicked() }
 
-        // Slider épaisseur
+        // Slider épaisseur dessin
+        strokeWidthSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    toolsManager.strokeWidth = (progress + 1).toFloat() // 0-19 → 1-20
+                    updateStrokeWidthDisplay()
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Slider épaisseur gomme
         eraserSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -359,26 +371,20 @@ class ToolsOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
                 contextualParametersContainer.visibility = View.VISIBLE
                 textSizeContainer.visibility = View.VISIBLE
                 strokeWidthContainer.visibility = View.GONE
+                eraserSizeContainer.visibility = View.GONE
             }
             ToolType.DRAWING -> {
                 contextualParametersContainer.visibility = View.VISIBLE
                 textSizeContainer.visibility = View.GONE
                 strokeWidthContainer.visibility = View.VISIBLE
-                strokeWidthSeekBar.visibility = View.VISIBLE
-                eraserSizeSeekBar.visibility = View.GONE
-                eraserSizeLabel.visibility = View.GONE
+                eraserSizeContainer.visibility = View.GONE
                 updateStrokeWidthDisplay()
             }
             ToolType.ERASER -> {
                 contextualParametersContainer.visibility = View.VISIBLE
                 textSizeContainer.visibility = View.GONE
-                strokeWidthContainer.visibility = View.VISIBLE
-                strokeWidthSeekBar.visibility = View.GONE
-                eraserSizeSeekBar.visibility = View.VISIBLE
-                eraserSizeLabel.visibility = View.VISIBLE
-
-                // Synchroniser avec la valeur actuelle
-                eraserSizeSeekBar.progress = toolsManager.eraserSize.toInt()
+                strokeWidthContainer.visibility = View.GONE
+                eraserSizeContainer.visibility = View.VISIBLE
                 updateEraserSizeDisplay()
             }
             else -> {
