@@ -37,6 +37,8 @@ import com.brewdog.catamap.ui.annotation.tools.ToolsOverlayListener
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import androidx.lifecycle.lifecycleScope
+import com.brewdog.catamap.ui.onboarding.OnboardingActivity
+import com.brewdog.catamap.ui.onboarding.OnboardingManager
 import kotlinx.coroutines.launch
 
 
@@ -87,11 +89,11 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     // Sauvegarde de l'état avant mode édition
     private var preEditState: PreEditState? = null
     private var annotationOverlay: AnnotationOverlay? = null
-    private var isDarkMode: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Logger.entry(TAG, "onCreate")
+        checkOnboarding()
 
         setContentView(R.layout.activity_main)
 
@@ -115,7 +117,24 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
         Logger.exit(TAG, "onCreate")
     }
+    /**
+     * Vérifie si l'onboarding doit être affiché
+     */
+    private fun checkOnboarding() {
+        val onboardingManager = OnboardingManager(this)
 
+        if (onboardingManager.shouldShowOnboarding()) {
+            Logger.i(TAG, "First launch detected - showing onboarding")
+
+            // Lancer l'onboarding
+            val intent = Intent(this, OnboardingActivity::class.java)
+            startActivity(intent)
+            finish() // Ferme MainActivity pour éviter le retour
+            return
+        }
+
+        Logger.i(TAG, "Onboarding already completed - proceeding normally")
+    }
     /**
      * Initialise toutes les vues
      */

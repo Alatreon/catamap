@@ -2,4 +2,9 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Couleurs pour l'onboarding -->
+    <color name="onboarding_background">#1a1a1a</color>
+    <color name="onboarding_accent">#FF9800</color>
+    <color name="onboarding_text">#E0E0E0</color>
+    <color name="onboarding_dots_inactive">#4D4D4D</color>
 </resources>

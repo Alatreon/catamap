@@ -80,18 +80,15 @@ class MapRepository(context: Context) {
      */
     private fun createDefaultDatabase(): MapDatabase {
         Logger.entry(TAG, "createDefaultDatabase")
-        
+
         val database = MapDatabase()
-        val exampleMap = MapItem.createExample()
-        
-        database.addOrUpdateMap(exampleMap)
-        
+
         // Sauvegarder immédiatement
         saveDatabase(database)
-        
+
         Logger.i(TAG, "Default database created with example map")
         Logger.exit(TAG, "createDefaultDatabase")
-        
+
         return database
     }
 

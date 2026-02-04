@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Couche de base : dégradé linéaire diagonal -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="linear"
+                android:angle="225"
+                android:startColor="#1a1a1a"
+                android:centerColor="#202020"
+                android:endColor="#151515" />
+        </shape>
+    </item>
+    
+    <!-- Couche 2 : dégradé radial pour effet de spotlight subtil -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="800dp"
+                android:centerX="0.3"
+                android:centerY="0.2"
+                android:startColor="#28242424"
+                android:endColor="#00000000" />
+        </shape>
+    </item>
+    
+    <!-- Couche 3 : autre dégradé radial décalé pour plus de profondeur -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="900dp"
+                android:centerX="0.7"
+                android:centerY="0.8"
+                android:startColor="#1E1E1E1E"
+                android:endColor="#00000000" />
+        </shape>
+    </item>
+    
+</layer-list>

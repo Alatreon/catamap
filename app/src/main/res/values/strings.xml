@@ -12,4 +12,20 @@
     <string name="gerer_les_cartes">Gérer les cartes</string>
     <string name="minimap">Minimap</string>
     <string name="editer_la_carte">Éditer la carte</string>
+    <!--  Onboarding  -->
+    <string name="onboarding_button_start">Commencer</string>
+    <string name="onboarding_icon_description">Icône de la slide</string>
+    <!--  Slide 1 - Légalité  -->
+    <string name="onboarding_slide1_title">Légalité &amp; accès aux lieux</string>
+    <string name="onboarding_slide1_description">Cette application est destinée à un usage informatif.\n\nL\'accès à certaines cavités, carrières souterraines, grottes ou ouvrages peut être interdit ou réglementé, notamment en application de l\'arrêté du 2 novembre 1955 et des réglementations locales en vigueur.\n\nIl appartient à chaque utilisateur de se renseigner sur la légalité de l\'accès aux lieux, d\'obtenir les autorisations nécessaires et de respecter la réglementation.</string>
+    <!--  Slide 2 - Risques  -->
+    <string name="onboarding_slide2_title">Risques &amp; responsabilité</string>
+    <string name="onboarding_slide2_description">La spéléologie et la progression en milieu souterrain comportent des risques sérieux (chutes, éboulements, inondations, perte de repères, hypothermie, etc.).\n\nL\'utilisateur est seul responsable de sa sécurité, de son équipement, de sa préparation et de ses choix.\n\nL\'auteur de l\'application ne saurait être tenu responsable des accidents, dommages ou infractions résultant de l\'utilisation de l\'application.</string>
+    <!--  Slide 3 - Fonctionnement  -->
+    <string name="onboarding_slide3_title">Fonctionnement de l\'app</string>
+    <string name="onboarding_slide3_description">CataMap ne propose aucune carte par défaut.\n\nC\'est à vous d\'ajouter vos propres cartes.\n\nMenu → Gérer les cartes → Ajouter une carte</string>
+    <!--  Slide 4 - Remerciements  -->
+    <string name="onboarding_slide4_title">Remerciements &amp; soutien</string>
+    <string name="onboarding_slide4_description">Merci d\'utiliser CataMap 🤍\n\nCette application est développée de manière indépendante, sur du temps personnel, par passion pour l\'exploration et le partage.\n\nSi l\'application vous est utile et que vous avez des suggestions ou des retours, vous pouvez contacter l\'auteur à :\n\ncatamapbrewdog@gmail.com</string>
+
 </resources>
