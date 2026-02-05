@@ -1,7 +1,6 @@
 package com.brewdog.catamap.ui.activities
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.content.Intent
 import android.graphics.PointF
 import android.os.Bundle
@@ -9,6 +8,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -37,6 +37,8 @@ import com.brewdog.catamap.ui.annotation.tools.ToolsOverlayListener
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import androidx.lifecycle.lifecycleScope
+import com.brewdog.catamap.ui.onboarding.OnboardingActivity
+import com.brewdog.catamap.ui.onboarding.OnboardingManager
 import kotlinx.coroutines.launch
 
 
@@ -73,6 +75,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     private lateinit var minimapView: MinimapView
     private lateinit var loadingOverlay: FrameLayout
     private lateinit var menuButton: ImageButton
+    private lateinit var emptyStateContainer: LinearLayout
 
     // État
     private var rotateWithCompass = false
@@ -87,11 +90,11 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     // Sauvegarde de l'état avant mode édition
     private var preEditState: PreEditState? = null
     private var annotationOverlay: AnnotationOverlay? = null
-    private var isDarkMode: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Logger.entry(TAG, "onCreate")
+        checkOnboarding()
 
         setContentView(R.layout.activity_main)
 
@@ -110,12 +113,31 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
         // Charger la carte
         loadInitialMap()
+        Logger.i(TAG, "Map loaded")
+
         // Initialiser le ToolsManager
         toolsManager = ToolsManager(this)
 
         Logger.exit(TAG, "onCreate")
     }
+    /**
+     * Vérifie si l'onboarding doit être affiché
+     */
+    private fun checkOnboarding() {
+        val onboardingManager = OnboardingManager(this)
 
+        if (onboardingManager.shouldShowOnboarding()) {
+            Logger.i(TAG, "First launch detected - showing onboarding")
+
+            // Lancer l'onboarding
+            val intent = Intent(this, OnboardingActivity::class.java)
+            startActivity(intent)
+            finish() // Ferme MainActivity pour éviter le retour
+            return
+        }
+
+        Logger.i(TAG, "Onboarding already completed - proceeding normally")
+    }
     /**
      * Initialise toutes les vues
      */
@@ -127,6 +149,8 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         minimapView = findViewById(R.id.minimapView)
         loadingOverlay = findViewById(R.id.loadingOverlay)
         menuButton = findViewById(R.id.menuButton)
+        emptyStateContainer = findViewById(R.id.emptyStateContainer)
+
 
         Logger.d(TAG, "All views initialized")
         Logger.exit(TAG, "initViews")
@@ -139,7 +163,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         Logger.entry(TAG, "initRepository")
 
         repository = MapRepository(this)
-        annotationRepository = AnnotationRepository(this)  // ← NOUVEAU
+        annotationRepository = AnnotationRepository(this)
 
         Logger.i(TAG, "Repositories initialized")
         Logger.exit(TAG, "initRepository")
@@ -381,14 +405,22 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         }
 
         if (map == null) {
-            Logger.e(TAG, "No map available to load")
-            // TODO: Afficher un message d'erreur
+            Logger.w(TAG, "No map available - showing empty state")
+            showEmptyState()
             return
         }
 
+        Logger.d(TAG, "Map found: ${map.name}, calling hideEmptyState()")
+
+        hideEmptyState()
+
+        Logger.d(TAG, "MapView visibility after hideEmptyState: ${mapView.visibility}")
+        Logger.d(TAG, "Starting map loading...")
+
         // Charger la carte
         mapLoader.startLoading(map)
-        mapViewController.loadMap(map, darkMode = true)
+        Logger.d(TAG, "Calling loadMap on controller...")
+        mapViewController.loadMap(map, darkMode = getCurrentDarkMode())
 
         layerManager = LayerManager(annotationRepository, lifecycleScope)
         lifecycleScope.launch {
@@ -403,7 +435,6 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
                 }, 2000)
             }
         }
-
 
         Logger.exit(TAG, "loadInitialMap")
     }
@@ -512,6 +543,10 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         Logger.entry(TAG, "toggleDarkMode")
 
         val newMode = !mapViewController.isDarkModeEnabled()
+
+        val sharedPrefs = getSharedPreferences("map_settings", MODE_PRIVATE)
+        sharedPrefs.edit().putBoolean("is_dark_mode", newMode).apply()
+        Logger.i(TAG, "Dark mode preference saved: $newMode")
 
         annotationOverlay?.updateDarkMode(newMode)
 
@@ -674,21 +709,30 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         super.onNewIntent(intent)
         Logger.entry(TAG, "onNewIntent")
 
-        setIntent(intent)
+        val mapId = intent.getStringExtra(AppConstants.Intent.EXTRA_SELECTED_MAP_ID)
+        if (mapId != null) {
+            Logger.i(TAG, "Map requested from intent: $mapId")
 
-        // Si une nouvelle carte est sélectionnée, la charger
-        val selectedMapId = intent.getStringExtra(AppConstants.Intent.EXTRA_SELECTED_MAP_ID)
-        if (selectedMapId != null) {
-            Logger.i(TAG, "Loading new map from intent: $selectedMapId")
+            val currentMap = mapViewController.getCurrentMap()
+
+            if (currentMap?.id == mapId) {
+                Logger.i(TAG, "Same map already loaded (${currentMap.name}), skipping reload")
+                return
+            }
+            Logger.i(TAG, "Different map requested, loading...")
+
             val database = repository.loadDatabase()
-            val map = database.getMapById(selectedMapId)
+            val map = database.getMapById(mapId)
+
             if (map != null) {
+                hideEmptyState()
                 loadNewMap(map)
             }
         }
 
         Logger.exit(TAG, "onNewIntent")
     }
+
 
     /**
      * Charge une nouvelle carte
@@ -697,7 +741,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     private fun loadNewMap(map: MapItem) {
         Logger.entry(TAG, "loadNewMap", map.name)
 
-        // 1. Supprimer l'overlay actuel
+        // Supprimer l'overlay actuel
         annotationOverlay?.let { overlay ->
             supportFragmentManager.beginTransaction()
                 .remove(overlay)
@@ -705,20 +749,20 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         }
         annotationOverlay = null
 
-        // 2. Cleanup LayerManager
+        // Cleanup LayerManager
         layerManager?.cleanup()
         layerManager = null
 
-        // 3. Charger la nouvelle carte
+        // Charger la nouvelle carte
         mapLoader.startLoading(map)
         mapViewController.loadMap(map, mapViewController.isDarkModeEnabled())
 
-        // 4. Créer nouveau LayerManager
+        // Créer nouveau LayerManager
         layerManager = LayerManager(annotationRepository, lifecycleScope)
         lifecycleScope.launch {
             layerManager!!.loadAnnotations(map.id)
 
-            // 5. Créer nouvel overlay
+            // Créer nouvel overlay
             withContext(Dispatchers.Main) {
                 showAnnotationOverlay()
             }
@@ -1012,8 +1056,50 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     }
 
     private fun getCurrentDarkMode(): Boolean {
-        val sharedPrefs = getSharedPreferences("map_settings", Context.MODE_PRIVATE)
-        return sharedPrefs.getBoolean("is_dark_mode", false)
+        val sharedPrefs = getSharedPreferences("map_settings", MODE_PRIVATE)
+        return sharedPrefs.getBoolean("is_dark_mode", true)
     }
 
+    /**
+     * Affiche l'état vide (aucune carte disponible)
+     */
+    private fun showEmptyState() {
+        Logger.entry(TAG, "showEmptyState")
+
+        // Masquer la carte et les contrôles
+        mapView.visibility = View.GONE
+        compassView.visibility = View.GONE
+        minimapView.visibility = View.GONE
+
+        // Afficher le message
+        emptyStateContainer.visibility = View.VISIBLE
+
+        // Configurer le bouton pour ouvrir le gestionnaire de cartes
+        val openManagerButton = emptyStateContainer.findViewById<com.google.android.material.button.MaterialButton>(R.id.openMapManagerButton)
+        openManagerButton?.setOnClickListener {
+            Logger.d(TAG, "Open map manager button clicked from empty state")
+            openMapManager()
+        }
+
+        Logger.i(TAG, "Empty state shown")
+        Logger.exit(TAG, "showEmptyState")
+    }
+
+    /**
+     * Masque l'état vide et affiche la carte
+     */
+    private fun hideEmptyState() {
+        Logger.entry(TAG, "hideEmptyState")
+
+        // Masquer le message
+        emptyStateContainer.visibility = View.GONE
+
+        // Afficher la carte et les contrôles
+        mapView.visibility = View.VISIBLE
+        compassView.visibility = View.VISIBLE
+        // La minimap sera affichée selon son état
+
+        Logger.i(TAG, "Empty state hidden")
+        Logger.exit(TAG, "hideEmptyState")
+    }
 }

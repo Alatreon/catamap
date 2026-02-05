@@ -10,6 +10,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CataMap">
+        <!-- OnboardingActivity -->
+        <activity
+            android:name=".ui.onboarding.OnboardingActivity"
+            android:exported="false"/>
         <activity
             android:name=".ui.activities.MainActivity"
             android:launchMode="singleTop"

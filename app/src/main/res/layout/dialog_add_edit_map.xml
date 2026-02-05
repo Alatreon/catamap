@@ -15,7 +15,7 @@
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Nom de la carte"
+            android:hint="@string/nom_de_la_carte"
             android:layout_marginBottom="16dp">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -31,7 +31,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Catégorie"
+            android:text="@string/categorie"
             android:textSize="12sp"
             android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="8dp"/>
@@ -46,7 +46,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Date d'ajout"
+            android:text="@string/date_d_ajout"
             android:textSize="12sp"
             android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="4dp"/>
@@ -55,7 +55,7 @@
             android:id="@+id/textDateAdded"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="07/01/2026"
+            android:text="@string/date_format"
             android:textSize="16sp"
             android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="24dp"/>
@@ -64,7 +64,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="IMAGE"
+            android:text="@string/carte"
             android:textSize="12sp"
             android:textStyle="bold"
             android:textColor="?android:attr/textColorPrimary"
@@ -74,7 +74,7 @@
             android:id="@+id/btnSelectImage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="📷 Sélectionner une image"
+            android:text="@string/selectionner_une_carte"
             android:textSize="16sp"
             android:layout_marginBottom="8dp"/>
 
@@ -83,7 +83,7 @@
             android:id="@+id/textImageStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Aucune image sélectionnée"
+            android:text="@string/aucune_carte_selectionnee"
             android:textSize="14sp"
             android:textColor="?android:attr/textColorSecondary"
             android:gravity="center"
@@ -104,7 +104,7 @@
             android:id="@+id/checkDefaultMap"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Définir comme carte par défaut"
+            android:text="@string/definir_comme_carte_par_defaut"
             android:textColor="?android:attr/textColorPrimary"
             android:layout_marginBottom="24dp"/>
 
@@ -119,13 +119,14 @@
                 android:id="@+id/btnDelete"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Supprimer"
+                android:text="@string/supprimer"
                 android:textColor="@android:color/holo_red_light"
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_marginBottom="8dp"/>
 
             <!-- Ligne Annuler + Enregistrer -->
             <LinearLayout
+                style="?android:attr/buttonBarStyle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal">
@@ -135,16 +136,17 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Annuler"
-                    style="?android:attr/borderlessButtonStyle"
-                    android:layout_marginEnd="8dp"/>
+                    android:text="@string/annuler"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_marginEnd="8dp" />
 
                 <Button
                     android:id="@+id/btnSave"
+                    style="?android:attr/borderlessButtonStyle"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Enregistrer"/>
+                    android:text="@string/enregistrer"/>
 
             </LinearLayout>
 

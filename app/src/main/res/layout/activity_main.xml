@@ -16,6 +16,8 @@
         app:panEnabled="true"
         app:zoomEnabled="true"/>
 
+    <include layout="@layout/empty_state_layout" />
+
     <!-- LOADER TRANSPARENT - La carte reste visible ! -->
     <FrameLayout
         android:id="@+id/loadingOverlay"

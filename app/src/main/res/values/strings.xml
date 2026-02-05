@@ -12,4 +12,46 @@
     <string name="gerer_les_cartes">Gérer les cartes</string>
     <string name="minimap">Minimap</string>
     <string name="editer_la_carte">Éditer la carte</string>
+    <string name="no_map_icon_description">Icône de carte</string>
+    <string name="open_map_manager">Gérer les cartes</string>
+    <!--  Onboarding  -->
+    <string name="onboarding_button_start">Commencer</string>
+    <string name="onboarding_icon_description">Icône de la slide</string>
+    <!--  Slide 1 - Légalité  -->
+    <string name="onboarding_slide1_title">Légalité &amp; accès aux lieux</string>
+    <string name="onboarding_slide1_description">Cette application est destinée à un usage informatif.\n\nL\'accès à certaines cavités, carrières souterraines, grottes ou ouvrages peut être interdit ou réglementé, notamment en application de l\'arrêté du 2 novembre 1955 et des réglementations locales en vigueur.\n\nIl appartient à chaque utilisateur de se renseigner sur la légalité de l\'accès aux lieux, d\'obtenir les autorisations nécessaires et de respecter la réglementation.</string>
+    <!--  Slide 2 - Risques  -->
+    <string name="onboarding_slide2_title">Risques &amp; responsabilité</string>
+    <string name="onboarding_slide2_description">La spéléologie et la progression en milieu souterrain comportent des risques sérieux (chutes, éboulements, inondations, perte de repères, hypothermie, etc.).\n\nL\'utilisateur est seul responsable de sa sécurité, de son équipement, de sa préparation et de ses choix.\n\nL\'auteur de l\'application ne saurait être tenu responsable des accidents, dommages ou infractions résultant de l\'utilisation de l\'application.</string>
+    <!--  Slide 3 - Fonctionnement  -->
+    <string name="onboarding_slide3_title">Fonctionnement de l\'app</string>
+    <string name="onboarding_slide3_description">CataMap ne fournit aucune carte.\n\nC\'est à vous d\'ajouter vos propres cartes.\n\nMenu → Gérer les cartes → Ajouter une carte</string>
+    <!--  Slide 4 - Remerciements  -->
+    <string name="onboarding_slide4_title">Remerciements &amp; soutien</string>
+    <string name="onboarding_slide4_description">Merci d\'utiliser CataMap 🤍\n\nCette application est développée de manière indépendante, sur du temps personnel, par passion pour l\'exploration et le partage.\n\nSi l\'application vous est utile et que vous avez des suggestions ou des retours, vous pouvez contacter l\'auteur à :\n\ncatamapbrewdog@gmail.com</string>
+
+    <!-- Bouton dans le gestionnaire de cartes -->
+    <string name="about_button">À propos</string>
+
+    <!-- Dialog À propos -->
+    <string name="about_dialog_title">À propos de CataMap</string>
+    <string name="about_dialog_message">Merci d\'utiliser CataMap 🤍\n\nPour toute suggestion ou rapport de bug :\ncatamapbrewdog@gmail.com\n\nPour tout soutien :\nhttps://ko-fi.com/catamap</string>
+    <string name="about_dialog_close">Fermer</string>
+
+    <!-- Email et lien (pour le code) -->
+    <string name="about_email">catamapbrewdog@gmail.com</string>
+    <string name="about_kofi_link">https://ko-fi.com/catamap</string>
+    <string name="aucune_carte_pour_commencer">Aucune carte.\nAjoutez-en une pour commencer.</string>
+    <string name="gerer_les_categories">Gérer les catégories</string>
+    <string name="selectionner_une_carte">🗺️ Sélectionner une carte</string>
+    <string name="aucune_carte_selectionnee">Aucune carte sélectionnée</string>
+    <string name="definir_comme_carte_par_defaut">Définir comme carte par défaut</string>
+    <string name="supprimer">Supprimer</string>
+    <string name="annuler">Annuler</string>
+    <string name="enregistrer">Enregistrer</string>
+    <string name="carte">CARTE</string>
+    <string name="date_d_ajout">Date d\'ajout</string>
+    <string name="date_format">JJ/MM/AAAA</string>
+    <string name="categorie">Catégorie</string>
+    <string name="nom_de_la_carte">Nom de la carte</string>
 </resources>

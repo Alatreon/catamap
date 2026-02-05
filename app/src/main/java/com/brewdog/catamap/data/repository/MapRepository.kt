@@ -30,10 +30,10 @@ class MapRepository(context: Context) {
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(
-        AppConstants.Storage.PREFS_NAME, 
+        AppConstants.Storage.PREFS_NAME,
         Context.MODE_PRIVATE
     )
-    
+
     private val gson: Gson = GsonBuilder()
         .registerTypeAdapter(Uri::class.java, UriSerializer())
         .registerTypeAdapter(Uri::class.java, UriDeserializer())
@@ -50,9 +50,9 @@ class MapRepository(context: Context) {
     fun loadDatabase(): MapDatabase {
         Logger.entry(TAG, "loadDatabase")
         val startTime = System.currentTimeMillis()
-        
+
         val json = prefs.getString(AppConstants.Storage.KEY_DATABASE, null)
-        
+
         val database = if (json != null) {
             Logger.d(TAG, "Found existing database JSON (${json.length} chars)")
             try {
@@ -64,34 +64,32 @@ class MapRepository(context: Context) {
                 MapDatabase()
             }
         } else {
-            Logger.i(TAG, "No existing database found, creating default database")
+            Logger.i(TAG, "No existing database found, creating empty database")
             createDefaultDatabase()
         }
-        
+
         val duration = System.currentTimeMillis() - startTime
         Logger.perf(TAG, "loadDatabase", duration)
         Logger.exit(TAG, "loadDatabase", "MapDatabase with ${database.maps.size} maps")
-        
+
         return database
     }
 
     /**
-     * Crée la base de données avec la carte d'exemple au premier lancement
+     * Crée une base de données vide au premier lancement
      */
     private fun createDefaultDatabase(): MapDatabase {
         Logger.entry(TAG, "createDefaultDatabase")
-        
+
+        // Base de données vide (pas de carte par défaut)
         val database = MapDatabase()
-        val exampleMap = MapItem.createExample()
-        
-        database.addOrUpdateMap(exampleMap)
-        
+
         // Sauvegarder immédiatement
         saveDatabase(database)
-        
-        Logger.i(TAG, "Default database created with example map")
+
+        Logger.i(TAG, "Empty database created (no default map)")
         Logger.exit(TAG, "createDefaultDatabase")
-        
+
         return database
     }
 
@@ -101,21 +99,21 @@ class MapRepository(context: Context) {
     fun saveDatabase(database: MapDatabase): Boolean {
         Logger.entry(TAG, "saveDatabase", "maps=${database.maps.size}")
         val startTime = System.currentTimeMillis()
-        
+
         return try {
             val json = gson.toJson(database)
             Logger.d(TAG, "Database serialized to JSON (${json.length} chars)")
-            
+
             prefs.edit {
                 putString(AppConstants.Storage.KEY_DATABASE, json)
             }
-            
+
             val duration = System.currentTimeMillis() - startTime
             Logger.perf(TAG, "saveDatabase", duration)
             Logger.i(TAG, "Database saved successfully")
             Logger.exit(TAG, "saveDatabase", true)
             true
-            
+
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to save database", e)
             Logger.exit(TAG, "saveDatabase", false)
