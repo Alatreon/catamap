@@ -137,7 +137,7 @@ class AddEditMapDialog : DialogFragment() {
                 // Vérifier à nouveau après l'opération IO
                 if (!isAdded) return@launch
 
-                // Mise à jour UI - phase 2: Génération version alternative
+                // Génération version alternative
                 withContext(Dispatchers.Main) {
                     textImageStatus.text = "Generation version alternative..."
                 }
@@ -253,7 +253,7 @@ class AddEditMapDialog : DialogFragment() {
             }
         } else {
             textDateAdded.text = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
-            textImageStatus.text = "Aucune image selectionnee"
+            textImageStatus.text = "Aucune image selectionnée"
         }
     }
 

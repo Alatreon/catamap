@@ -61,6 +61,16 @@
         <item name="buttonBarNegativeButtonStyle">@style/Theme.CataMap.Dialog.NegativeButton</item>
     </style>
 
+    <style name="AboutDialog" parent="Theme.Material3.Dark.Dialog.Alert">
+        <item name="android:background">#1a1a1a</item>
+        <item name="android:textColor">#E0E0E0</item>
+        <item name="android:textColorPrimary">#E0E0E0</item>
+        <item name="android:textColorSecondary">#B0B0B0</item>
+        <item name="colorPrimary">#FF9800</item>
+        <item name="colorAccent">#FF9800</item>
+        <item name="android:windowBackground">@drawable/dialog_background_dark</item>
+    </style>
+
     <!-- Style pour bouton "Créer/Renommer" -->
     <style name="Theme.CataMap.Dialog.PositiveButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
         <item name="android:textColor">#1976D2</item> <!-- Bleu -->

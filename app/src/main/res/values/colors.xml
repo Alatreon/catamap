@@ -7,4 +7,5 @@
     <color name="onboarding_accent">#FF9800</color>
     <color name="onboarding_text">#E0E0E0</color>
     <color name="onboarding_dots_inactive">#4D4D4D</color>
+    <color name="orange_secondary">#a86502</color>
 </resources>
