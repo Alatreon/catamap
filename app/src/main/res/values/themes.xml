@@ -51,8 +51,6 @@
         <item name="android:background">@color/dialog_background</item>
         <item name="backgroundTint">@color/dialog_background</item>
 
-        <!-- NOUVEAUX ATTRIBUTS POUR LES CALQUES -->
-
         <!-- Couleur du hint "Nom du calque" -->
         <item name="android:textColorHint">#828282</item>
         <!-- Couleur du TITRE du dialog -->
