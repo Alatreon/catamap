@@ -3,6 +3,7 @@ package com.brewdog.catamap.data.repository
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.brewdog.catamap.constants.AppConstants
@@ -17,13 +18,14 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonPrimitive
 import com.google.gson.JsonSerializationContext
 import com.google.gson.JsonSerializer
+import java.io.File
 import java.lang.reflect.Type
 
 /**
  * Repository pour la gestion du stockage persistant des cartes et catégories
  * Implémente le pattern Repository pour séparer la logique de stockage
  */
-class MapRepository(context: Context) {
+class MapRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "MapRepository"
@@ -187,6 +189,31 @@ class MapRepository(context: Context) {
             context: JsonSerializationContext?
         ): JsonElement {
             return JsonPrimitive(src?.toString() ?: "")
+        }
+    }
+
+    /**
+     * Supprime les fichiers associes a une carte
+     */
+    fun deleteMapFiles(map: MapItem) {
+        listOfNotNull(
+            map.lightImageUri,
+            map.darkImageUri,
+            map.lightMinimapUri,
+            map.darkMinimapUri
+        ).forEach { uri ->
+            try {
+                val path = uri.path
+                if (path != null && path.contains(context.filesDir.path)) {
+                    val file = File(path)
+                    if (file.exists()) {
+                        file.delete()
+                        Log.d("MapRepository", "Deleted file: ${file.name}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("MapRepository", "Error deleting file", e)
+            }
         }
     }
 

@@ -1,6 +1,4 @@
-package com.brewdog.catamap.domain.annotation.tools
-
-import com.brewdog.catamap.utils.logging.Logger
+package com.brewdog.catamap.ui.annotation.tools
 
 /**
  * Types d'outils disponibles dans le mode édition

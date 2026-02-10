@@ -46,6 +46,7 @@ class MapManagerActivity : AppCompatActivity() {
     private lateinit var btnAddMap: Button
     private lateinit var btnManageCategories: Button
     private lateinit var btnAbout: Button
+    private var aboutDialog: AlertDialog? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -139,6 +140,8 @@ class MapManagerActivity : AppCompatActivity() {
         }
 
         dialog.setOnDeleteListener {
+            repository.deleteMapFiles(map)
+
             if (database.removeMap(map.id)) {
                 repository.saveDatabase(database)
                 refreshList()
@@ -232,29 +235,32 @@ class MapManagerActivity : AppCompatActivity() {
         }
         spannableMessage.setSpan(kofiClickable, kofiStart, kofiEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-        // Créer et afficher le dialog avec style sombre
-        val dialog = AlertDialog.Builder(this, R.style.AboutDialog)
+// Fermer le dialog precedent s'il existe
+        aboutDialog?.dismiss()
+
+// Creer et afficher le dialog avec style sombre
+        aboutDialog = AlertDialog.Builder(this, R.style.AboutDialog)
             .setTitle(R.string.about_dialog_title)
             .setMessage(spannableMessage)
             .setPositiveButton(R.string.about_dialog_close, null)
             .create()
 
-        dialog.show()
+        aboutDialog?.show()
 
         // Personnaliser les couleurs après affichage
-        dialog.findViewById<TextView>(android.R.id.message)?.apply {
+        aboutDialog?.findViewById<TextView>(android.R.id.message)?.apply {
             movementMethod = LinkMovementMethod.getInstance()
             setTextColor("#E0E0E0".toColorInt()) // Texte clair
             setLinkTextColor("#FF9800".toColorInt()) // Liens orange
         }
 
         // Couleur du titre
-        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.apply {
+        aboutDialog?.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.apply {
             setTextColor("#E0E0E0".toColorInt())
         }
 
         // Couleur du bouton
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
+        aboutDialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
             setTextColor("#FF9800".toColorInt())
         }
 
@@ -289,7 +295,7 @@ class MapManagerActivity : AppCompatActivity() {
         Logger.entry(TAG, "openKofiLink")
 
         try {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ko-fi.com/catamap"))
+            val browserIntent = Intent(Intent.ACTION_VIEW, "https://ko-fi.com/catamap".toUri())
             startActivity(browserIntent)
             Logger.i(TAG, "Ko-fi link opened in browser")
         } catch (e: Exception) {
@@ -303,8 +309,13 @@ class MapManagerActivity : AppCompatActivity() {
         super.onPause()
         Logger.entry(TAG, "onPause")
 
+        // Fermer le dialog pour eviter les fuites de memoire
+        aboutDialog?.dismiss()
+        aboutDialog = null
+
         repository.saveDatabase(database)
 
         Logger.exit(TAG, "onPause")
     }
+
 }

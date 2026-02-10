@@ -20,7 +20,7 @@
         android:layout_height="24dp"
         android:src="@drawable/ic_drag_handle"
         android:alpha="0.5"
-        android:contentDescription="Réorganiser"
+        android:contentDescription="@string/reorganiser"
         app:tint="?attr/colorOnSurface"/>
 
     <!-- Indicateur calque actif -->
@@ -41,7 +41,7 @@
         android:layout_marginStart="4dp"
         android:layout_marginEnd="12dp"
         android:src="@drawable/ic_layer_empty"
-        android:contentDescription="Type de calque"
+        android:contentDescription="@string/type_de_calque"
         app:tint="?attr/colorOnSurface"/>
 
     <!-- Nom du calque -->
@@ -50,7 +50,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:text="Calque 1"
+        android:text="@string/calque_1"
         android:textSize="16sp"
         android:textColor="?attr/colorOnSurface"
         android:singleLine="true"
@@ -64,7 +64,7 @@
         android:layout_marginStart="8dp"
         android:src="@drawable/ic_visibility"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Afficher/Masquer"
+        android:contentDescription="@string/afficher_masquer"
         app:tint="?attr/colorOnSurface"/>
 
     <!-- Bouton suppression -->
@@ -75,7 +75,7 @@
         android:layout_marginStart="4dp"
         android:src="@drawable/ic_delete"
         android:background="?attr/selectableItemBackgroundBorderless"
-        android:contentDescription="Supprimer"
+        android:contentDescription="@string/supprimer"
         app:tint="@android:color/holo_red_light"/>
 
 </LinearLayout>

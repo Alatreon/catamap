@@ -10,6 +10,8 @@ import androidx.viewpager2.widget.ViewPager2
 import com.brewdog.catamap.R
 import com.brewdog.catamap.ui.activities.MainActivity
 import com.tbuonomo.viewpagerdotsindicator.DotsIndicator
+import androidx.activity.OnBackPressedCallback
+
 
 /**
  * Activité d'onboarding full-screen
@@ -25,6 +27,13 @@ class OnboardingActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_onboarding)
+
+        // Desactiver le bouton retour pendant l'onboarding
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Ne rien faire - empeche de quitter l'onboarding accidentellement
+            }
+        })
 
         // Initialiser le manager
         onboardingManager = OnboardingManager(this)
@@ -117,12 +126,5 @@ class OnboardingActivity : AppCompatActivity() {
                 description = getString(R.string.onboarding_slide4_description)
             )
         )
-    }
-
-    /**
-     * Désactiver le bouton retour
-     */
-    override fun onBackPressed() {
-        // Ne rien faire - empêche de quitter l'onboarding accidentellement
     }
 }

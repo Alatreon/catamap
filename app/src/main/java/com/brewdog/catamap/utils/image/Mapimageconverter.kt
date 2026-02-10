@@ -64,12 +64,15 @@ object MapImageConverter {
                 transformedBitmap
             }
 
-            // 5. Sauvegarder en PNG (compression lossless)
-            val outputFile = File(context.cacheDir, "converted_${System.currentTimeMillis()}.png")
+            // 5. Sauvegarder en PNG (compression lossless) dans un dossier permanent
+            val mapsDir = File(context.filesDir, "maps")
+            if (!mapsDir.exists()) {
+                mapsDir.mkdirs()
+            }
+            val outputFile = File(mapsDir, "converted_${System.currentTimeMillis()}.png")
             FileOutputStream(outputFile).use { out ->
                 finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
-
             Log.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
 
             return@withContext Uri.fromFile(outputFile)

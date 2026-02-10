@@ -54,4 +54,15 @@
     <string name="date_format">JJ/MM/AAAA</string>
     <string name="categorie">Catégorie</string>
     <string name="nom_de_la_carte">Nom de la carte</string>
+    <string name="afficher_masquer">Afficher/Masquer</string>
+    <string name="calque_1">Calque 1</string>
+    <string name="type_de_calque">Type de calque</string>
+    <string name="reorganiser">Réorganiser</string>
+    <string name="par_defaut">⭐ Par défaut</string>
+    <string name="modifier_la_carte">Modifier la carte</string>
+    <string name="gomme">Gomme</string>
+    <string name="fermer">Fermer</string>
+    <string name="couleur">Couleur</string>
+    <string name="dessin">Dessin</string>
+    <string name="texte">Texte</string>
 </resources>

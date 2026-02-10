@@ -61,7 +61,7 @@
         <item name="buttonBarNegativeButtonStyle">@style/Theme.CataMap.Dialog.NegativeButton</item>
     </style>
 
-    <style name="AboutDialog" parent="Theme.Material3.Dark.Dialog.Alert">
+    <style name="AboutDialog" parent="Theme.MaterialComponents.DayNight.Dialog.Alert">
         <item name="android:background">#1a1a1a</item>
         <item name="android:textColor">#E0E0E0</item>
         <item name="android:textColorPrimary">#E0E0E0</item>

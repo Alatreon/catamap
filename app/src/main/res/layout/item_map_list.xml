@@ -18,7 +18,7 @@
         android:textSize="16sp"
         android:textColor="?android:textColorPrimary"
         android:textStyle="bold"
-        tools:text="Carte géologique FDP 2019"
+        tools:text="Carte GEO 2019"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/btnEdit"/>
@@ -28,7 +28,7 @@
         android:id="@+id/defaultIndicator"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="⭐ Par défaut"
+        android:text="@string/par_defaut"
         android:textSize="12sp"
         android:textColor="?android:textColorSecondary"
         android:visibility="gone"
@@ -43,7 +43,7 @@
         android:layout_height="48dp"
         android:background="?android:selectableItemBackgroundBorderless"
         android:src="@android:drawable/ic_menu_edit"
-        android:contentDescription="Modifier la carte"
+        android:contentDescription="@string/modifier_la_carte"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>

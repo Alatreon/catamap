@@ -4,7 +4,9 @@ import android.app.AlertDialog
 import android.app.Dialog
 import android.os.Bundle
 import androidx.fragment.app.DialogFragment
+import com.brewdog.catamap.R
 import com.brewdog.catamap.utils.logging.Logger
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
  * Dialog de confirmation pour supprimer un texte avec la gomme
@@ -35,7 +37,7 @@ class EraseTextConfirmDialog : DialogFragment() {
 
         val textContent = arguments?.getString(ARG_TEXT_CONTENT) ?: ""
 
-        return AlertDialog.Builder(requireContext())
+        return MaterialAlertDialogBuilder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Supprimer")
             .setMessage("Supprimer le texte \"$textContent\" ?")
             .setPositiveButton("Supprimer") { _, _ ->

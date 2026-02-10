@@ -23,6 +23,7 @@ import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 import com.brewdog.catamap.data.models.Category
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class AddEditMapDialog : DialogFragment() {
 
@@ -290,7 +291,7 @@ class AddEditMapDialog : DialogFragment() {
     }
 
     private fun confirmDelete() {
-        AlertDialog.Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Supprimer")
             .setMessage("Supprimer cette carte ?")
             .setPositiveButton("Oui") { _, _ -> onDeleteListener?.invoke(); dismiss() }

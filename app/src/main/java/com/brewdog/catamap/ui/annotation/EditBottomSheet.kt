@@ -6,13 +6,11 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.brewdog.catamap.R
-import com.brewdog.catamap.data.repository.AnnotationRepository
 import com.brewdog.catamap.domain.annotation.LayerChangeListener
 import com.brewdog.catamap.domain.annotation.LayerManager
 import com.brewdog.catamap.domain.annotation.models.Layer
@@ -20,6 +18,7 @@ import com.brewdog.catamap.ui.activities.MainActivity
 import com.brewdog.catamap.utils.logging.Logger
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.launch
 
@@ -55,9 +54,8 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     private lateinit var btnAddLayer: View
     private lateinit var layersRecyclerView: RecyclerView
     private lateinit var emptyStateText: TextView
-
     // Managers
-    private lateinit var layerManager: LayerManager
+    private var layerManager: LayerManager? = null
     private lateinit var layerAdapter: LayerAdapter
     private lateinit var itemTouchHelper: ItemTouchHelper
 
@@ -138,12 +136,13 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
     private fun initLayerManager() {
         // Le LayerManager est déjà initialisé (partagé avec MainActivity)
-        if (!::layerManager.isInitialized) {
+        val manager = layerManager
+        if (manager == null) {
             Logger.e(TAG, "LayerManager not provided!")
             return
         }
 
-        layerManager.addListener(this)
+        manager.addListener(this)
         Logger.d(TAG, "LayerManager shared from MainActivity")
     }
 
@@ -178,9 +177,9 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         // On ne désactive pas le bouton, on change juste son apparence
         // et on affiche le toast si nécessaire
         btnTools.setOnClickListener {
-            val layers = layerManager.getLayers()
-            val activeLayer = layerManager.getActiveLayer()
-            val canUseTools = layers.isNotEmpty() && activeLayer != null && activeLayer.isVisible
+            val layers = layerManager?.getLayers()
+            val activeLayer = layerManager?.getActiveLayer()
+            val canUseTools = layers?.isNotEmpty() == true && activeLayer != null && activeLayer.isVisible
 
             if (canUseTools) {
                 showFeedback("Outils à venir dans la prochaine version")
@@ -206,9 +205,9 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
         // Bouton Outils
         btnTools.setOnClickListener {
-            val layers = layerManager.getLayers()
-            val activeLayer = layerManager.getActiveLayer()
-            val canUseTools = layers.isNotEmpty() && activeLayer != null && activeLayer.isVisible
+            val layers = layerManager?.getLayers()
+            val activeLayer = layerManager?.getActiveLayer()
+            val canUseTools = layers?.isNotEmpty() == true && activeLayer != null && activeLayer.isVisible
 
             if (canUseTools) {
                 // Fermer le Bottom Sheet
@@ -236,7 +235,7 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
         lifecycleScope.launch {
             try {
-                layerManager.loadAnnotations(mapId)
+                layerManager?.loadAnnotations(mapId)
                 Logger.i(TAG, "Annotations loaded successfully")
 
             } catch (e: Exception) {
@@ -252,12 +251,12 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         Logger.entry(TAG, "onLayerClicked", layer.name)
 
         // On peut activer un calque même s'il est masqué
-        val result = layerManager.setActiveLayer(layer.id)
+        val result = layerManager?.setActiveLayer(layer.id)
 
-        result.onSuccess {
+        result?.onSuccess {
             showFeedback("Calque activé : ${layer.name}")
             updateToolsButtonState()
-        }.onFailure { error ->
+        }?.onFailure { error ->
             Logger.w(TAG, "Failed to activate layer", error)
             showFeedback(error.message ?: "Erreur")
         }
@@ -266,11 +265,11 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     private fun onToggleVisibility(layer: Layer) {
         Logger.entry(TAG, "onToggleVisibility", layer.name)
 
-        val result = layerManager.toggleLayerVisibility(layer.id)
+        val result = layerManager?.toggleLayerVisibility(layer.id)
 
-        result.onSuccess {
+        result?.onSuccess {
             // Récupérer le nouvel état depuis le layer
-            val updatedLayer = layerManager.getLayers().find { it.id == layer.id }
+            val updatedLayer = layerManager?.getLayers()?.find { it.id == layer.id }
             val newVisibility = updatedLayer?.isVisible ?: false
 
             val message = if (newVisibility) {
@@ -284,7 +283,7 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
             // Mettre à jour l'état du bouton outils
             updateToolsButtonState()
-        }.onFailure { error ->
+        }?.onFailure { error ->
             Logger.e(TAG, "Failed to toggle visibility", error)
             showFeedback(error.message ?: "Erreur")
         }
@@ -306,11 +305,11 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     }
 
     private fun deleteLayerConfirmed(layer: Layer) {
-        val result = layerManager.removeLayer(layer.id)
+        val result = layerManager?.removeLayer(layer.id)
 
-        result.onSuccess {
+        result?.onSuccess {
             showFeedback("Calque supprimé")
-        }.onFailure { error ->
+        }?.onFailure { error ->
             Logger.w(TAG, "Failed to delete layer", error)
             showFeedback(error.message ?: "Erreur")
         }
@@ -323,23 +322,25 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     }
 
     private fun onLayerMoved(fromPosition: Int, toPosition: Int) {
-        Logger.v(TAG, "Layer moved: $fromPosition → $toPosition")
+        val manager = layerManager ?: return
 
-        // Mettre à jour l'ordre dans l'adapter
+        Logger.v(TAG, "Layer moved: $fromPosition -> $toPosition")
+
+        // Mettre a jour l'ordre dans l'adapter
         val layers = layerAdapter.getLayers().toMutableList()
         val movedLayer = layers.removeAt(fromPosition)
         layers.add(toPosition, movedLayer)
 
-        // Mettre à jour l'adapter
-        layerAdapter.updateLayers(layers, layerManager.getActiveLayerId())
+        // Mettre a jour l'adapter
+        layerAdapter.updateLayers(layers, manager.getActiveLayerId())
 
         // Sauvegarder le nouvel ordre
-        val result = layerManager.reorderLayers(layers)
+        val result = manager.reorderLayers(layers)
 
         result.onFailure { error ->
             Logger.e(TAG, "Failed to reorder layers", error)
             // Recharger l'ordre original
-            onLayersChanged(layerManager.getLayers(), layerManager.getActiveLayerId() ?: "")
+            onLayersChanged(manager.getLayers(), manager.getActiveLayerId() ?: "")
         }
     }
 
@@ -348,21 +349,22 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
         if (allLayersHidden) {
             // Afficher tous
-            val result = layerManager.showAllLayers()
+            val result = layerManager?.showAllLayers()
 
-            result.onSuccess {
+            result?.onSuccess {
                 allLayersHidden = false
                 btnToggleAllLayers.text = "Masquer tous"
                 showFeedback("Tous les calques affichés")
             }
         } else {
             // Masquer tous (vraiment tous, y compris le calque actif)
-            val result = layerManager.hideAllLayers()
+            val result = layerManager?.hideAllLayers()
 
-            result.onSuccess {
+            result?.onSuccess {
                 allLayersHidden = true
                 btnToggleAllLayers.text = "Afficher tous"
                 showFeedback("Tous les calques masqués")
+
             }
         }
 
@@ -375,7 +377,7 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         Logger.entry(TAG, "showAddLayerDialog")
 
         // Récupérer les noms existants
-        val existingNames = layerManager.getLayers().map { it.name }
+        val existingNames = layerManager?.getLayers()?.map { it.name }
 
         val dialog = AddLayerDialog.newInstance(existingNames) { name ->
             onAddLayer(name)
@@ -386,11 +388,11 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     private fun onAddLayer(name: String) {
         Logger.entry(TAG, "onAddLayer", name)
 
-        val result = layerManager.addLayer(name)
+        val result = layerManager?.addLayer(name)
 
-        result.onSuccess { layer ->
+        result?.onSuccess { layer ->
             showFeedback("Calque créé : ${layer.name}")
-        }.onFailure { error ->
+        }?.onFailure { error ->
             Logger.w(TAG, "Failed to add layer", error)
             // Afficher l'erreur à l'utilisateur
             showFeedback(error.message ?: "Erreur lors de la création du calque")
@@ -399,7 +401,7 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
     private fun showRenameLayerDialog(layer: Layer) {
         // Récupérer les noms existants
-        val existingNames = layerManager.getLayers().map { it.name }
+        val existingNames = layerManager?.getLayers()?.map { it.name }
 
         val dialog = RenameLayerDialog.newInstance(layer.id, layer.name, existingNames) { newName ->
             onRenameLayerConfirmed(layer.id, newName)
@@ -410,11 +412,11 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     private fun onRenameLayerConfirmed(layerId: String, newName: String) {
         Logger.entry(TAG, "onRenameLayerConfirmed", newName)
 
-        val result = layerManager.renameLayer(layerId, newName)
+        val result = layerManager?.renameLayer(layerId, newName)
 
-        result.onSuccess {
+        result?.onSuccess {
             showFeedback("Calque renommé")
-        }.onFailure { error ->
+        }?.onFailure { error ->
             Logger.w(TAG, "Failed to rename layer", error)
             showFeedback(error.message ?: "Erreur")
         }
@@ -423,9 +425,9 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     private fun showDeleteConfirmationDialog(layer: Layer) {
         val count = layer.annotations.size
 
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext(), R.style.Theme_CataMap_Dialog)
             .setTitle("Supprimer le calque ?")
-            .setMessage("Le calque \"${layer.name}\" contient $count annotation(s).\n\nCette action est irréversible.")
+            .setMessage("Le calque \"${layer.name}\" contient $count annotation(s).\n\nCette action est irreversible.")
             .setPositiveButton("Supprimer") { _, _ ->
                 deleteLayerConfirmed(layer)
             }
@@ -436,10 +438,11 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     // ========== UI UPDATES ==========
 
     override fun onLayersChanged(layers: List<Layer>, activeLayerId: String) {
-        Logger.v(TAG, "onLayersChanged: ${layers.size} layers")
+
+        Logger.v(TAG, "onLayersChanged: ${layers?.size} layers")
 
         // Afficher/masquer le message liste vide
-        if (layers.isEmpty()) {
+        if (layers?.isEmpty() == true) {
             layersRecyclerView.visibility = View.GONE
             emptyStateText.visibility = View.VISIBLE
         } else {
@@ -474,19 +477,19 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
     }
 
     private fun updateToolsButtonState() {
-        val layers = layerManager.getLayers()
-        val activeLayer = layerManager.getActiveLayer()
+        val layers = layerManager?.getLayers()
+        val activeLayer = layerManager?.getActiveLayer()
 
         // Bouton grisé si :
         // 1. Aucun calque (liste vide)
         // 2. OU calque actif masqué
-        val shouldEnable = layers.isNotEmpty() && activeLayer != null && activeLayer.isVisible
+        val shouldEnable = layers?.isNotEmpty() == true && activeLayer != null && activeLayer.isVisible
 
         // Ne pas désactiver le bouton pour permettre le clic et le Toast
         // On change juste l'apparence
         btnTools.alpha = if (shouldEnable) 1.0f else 0.5f
 
-        Logger.d(TAG, "Tools button: shouldEnable=$shouldEnable (layers=${layers.size}, active=${activeLayer?.name}, visible=${activeLayer?.isVisible})")
+        Logger.d(TAG, "Tools button: shouldEnable=$shouldEnable (layers=${layers?.size}, active=${activeLayer?.name}, visible=${activeLayer?.isVisible})")
     }
 
     // ========== FEEDBACK ==========
@@ -503,11 +506,11 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         super.onDestroyView()
 
         Logger.entry(TAG, "onDestroyView")
-
+        val manager = layerManager
         // Sauvegarder immédiatement avant de fermer
         lifecycleScope.launch {
             try {
-                layerManager.saveAnnotationsImmediate()
+                manager?.saveAnnotationsImmediate()
                 Logger.i(TAG, "Annotations saved on close")
             } catch (e: Exception) {
                 Logger.e(TAG, "Failed to save on close", e)
@@ -515,15 +518,8 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
         }
 
         // Cleanup listeners seulement
-        layerManager.removeListener(this)
+        layerManager?.removeListener(this)
 
         Logger.d(TAG, "LayerManager kept alive for ToolsOverlay")
-    }
-
-    /**
-     * Expose le LayerManager pour utilisation par MainActivity/ToolsOverlay
-     */
-    fun getLayerManager(): LayerManager {
-        return layerManager
     }
 }

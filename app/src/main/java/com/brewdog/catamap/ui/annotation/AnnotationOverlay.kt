@@ -19,13 +19,15 @@ import com.brewdog.catamap.domain.annotation.LayerManager
 import com.brewdog.catamap.domain.annotation.models.AnnotationEdit
 import com.brewdog.catamap.domain.annotation.models.Layer
 import com.brewdog.catamap.domain.annotation.tools.DouglasPeucker
-import com.brewdog.catamap.domain.annotation.tools.ToolType
+import com.brewdog.catamap.ui.annotation.tools.ToolType
 import com.brewdog.catamap.domain.annotation.tools.ToolsManager
 import com.brewdog.catamap.domain.annotation.tools.ToolsStateListener
+import com.brewdog.catamap.ui.activities.MainActivity
 import com.brewdog.catamap.utils.logging.Logger
 import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView
 import java.util.UUID
 import kotlin.math.sqrt
+import androidx.core.graphics.withSave
 
 /**
  * Overlay transparent pour afficher et gérer les annotations
@@ -56,9 +58,9 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         }
     }
 
-    private lateinit var toolsManager: ToolsManager
-    private lateinit var layerManager: LayerManager
-    private lateinit var mapView: SubsamplingScaleImageView
+    private var toolsManager: ToolsManager? = null
+    private var layerManager: LayerManager? = null
+    private var mapView: SubsamplingScaleImageView? = null
 
     private var mapId: String = ""
     private var isDarkMode: Boolean = false
@@ -75,6 +77,20 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         Logger.d(TAG, "Initialized: mapId=$mapId, isDarkMode=$isDarkMode")
     }
 
+    /**
+     * Recupere les dependances depuis l activite parente
+     * Appele dans onCreateView pour gerer la recreation apres rotation
+     */
+    private fun retrieveDependenciesFromActivity(): Boolean {
+        val activity = activity as? MainActivity ?: return false
+
+        toolsManager = activity.getToolsManager()
+        layerManager = activity.getLayerManager()
+        mapView = activity.getMapView()
+
+        return toolsManager != null && layerManager != null && mapView != null
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -82,13 +98,21 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
     ): View {
         Logger.entry(TAG, "onCreateView")
 
+        if (toolsManager == null || layerManager == null || mapView == null) {
+            Logger.d(TAG, "Dependencies not injected, retrieving from activity")
+            if (!retrieveDependenciesFromActivity()) {
+                Logger.e(TAG, "Failed to retrieve dependencies from activity")
+                return View(requireContext())
+            }
+        }
+
         canvasView = AnnotationCanvasView(requireContext()).apply {
             isClickable = true
             isFocusable = true
 
-            this.toolsManager = this@AnnotationOverlay.toolsManager
-            this.layerManager = this@AnnotationOverlay.layerManager
-            this.mapView = this@AnnotationOverlay.mapView
+            this.toolsManager = this@AnnotationOverlay.toolsManager!!
+            this.layerManager = this@AnnotationOverlay.layerManager!!
+            this.mapView = this@AnnotationOverlay.mapView!!
             this.isDarkMode = this@AnnotationOverlay.isDarkMode
             this.fragmentManager = this@AnnotationOverlay.childFragmentManager
         }
@@ -100,8 +124,11 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
         super.onViewCreated(view, savedInstanceState)
         Logger.entry(TAG, "onViewCreated")
 
-        toolsManager.addListener(this)
-        layerManager.addListener(this)
+        val tools = toolsManager ?: return
+        val layers = layerManager ?: return
+
+        tools.addListener(this)
+        layers.addListener(this)
 
         canvasView.invalidate()
 
@@ -155,8 +182,8 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
     }
 
     override fun onDestroyView() {
-        toolsManager.removeListener(this)
-        layerManager.removeListener(this)
+        toolsManager?.removeListener(this)
+        layerManager?.removeListener(this)
         super.onDestroyView()
         Logger.d(TAG, "AnnotationOverlay destroyed")
     }
@@ -173,9 +200,9 @@ class AnnotationCanvasView(context: Context) : View(context) {
         private const val SMOOTHING_EPSILON = 2.0f  // Douglas-Peucker tolerance
     }
 
-    lateinit var toolsManager: ToolsManager
-    lateinit var layerManager: LayerManager
-    lateinit var mapView: SubsamplingScaleImageView
+    var toolsManager: ToolsManager? = null
+    var layerManager: LayerManager? = null
+    var mapView: SubsamplingScaleImageView? = null
     var isDarkMode: Boolean = false
 
     private val renderer = AnnotationRenderer()
@@ -208,10 +235,11 @@ class AnnotationCanvasView(context: Context) : View(context) {
     private var isErasing = false
     private var eraserPosition: PointF? = null
     private var eraserRadius: Float
-        get() = toolsManager.eraserSize
+        get() = toolsManager?.eraserSize ?: 30f
         set(value) {
-            toolsManager.eraserSize = value
+            toolsManager?.eraserSize = value
         }
+
 
     // Pour le découpage des dessins
     private data class PointToRemove(
@@ -231,17 +259,15 @@ class AnnotationCanvasView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        if (!::mapView.isInitialized || !mapView.isReady) {
+        val map = mapView ?: return
+        val layerMgr = layerManager ?: return
+
+        if (!map.isReady) {
             Logger.v(TAG, "Map not ready, skipping draw")
             return
         }
 
-        if (!::layerManager.isInitialized) {
-            Logger.v(TAG, "LayerManager not ready, skipping draw")
-            return
-        }
-
-        val allLayers = layerManager.getLayers()
+        val allLayers = layerMgr.getLayers()
         val visibleLayers = allLayers.filter { it.isVisible }
 
         if (visibleLayers.isEmpty() && !isDrawing) {
@@ -249,42 +275,43 @@ class AnnotationCanvasView(context: Context) : View(context) {
             return
         }
 
-        val layers = visibleLayers.sortedBy { it.zIndex }
+        val sortedLayers = visibleLayers.sortedBy { it.zIndex }
 
-        canvas.save()
+        canvas.withSave {
 
-        try {
-            applyMapTransformations(canvas)
+            try {
+                applyMapTransformations(this)
 
-            // Dessiner annotations existantes
-            layers.forEach { layer ->
-                layer.annotations.forEach { annotation ->
-                    when (annotation) {
-                        is AnnotationEdit.Text -> {
-                            drawTextAnnotation(canvas, annotation, layer)
-                        }
-                        is AnnotationEdit.Drawing -> {
-                            renderer.drawPath(canvas, annotation, isDarkMode)
+                // Dessiner annotations existantes
+                sortedLayers.forEach { layer ->
+                    layer.annotations.forEach { annotation ->
+                        when (annotation) {
+                            is AnnotationEdit.Text -> {
+                                drawTextAnnotation(this, annotation, layer)
+                            }
+
+                            is AnnotationEdit.Drawing -> {
+                                renderer.drawPath(this, annotation, isDarkMode)
+                            }
                         }
                     }
                 }
-            }
 
-            // Dessiner le trait en cours (temporaire)
-            if (isDrawing && currentDrawingPoints.size > 1) {
-                drawTemporaryDrawing(canvas, currentDrawingPoints)
-            }
-            if (isErasing && eraserPosition != null) {
-                drawEraserCursor(canvas, eraserPosition!!)
-            }
+                // Dessiner le trait en cours (temporaire)
+                if (isDrawing && currentDrawingPoints.size > 1) {
+                    drawTemporaryDrawing(this, currentDrawingPoints)
+                }
+                if (isErasing && eraserPosition != null) {
+                    drawEraserCursor(this, eraserPosition!!)
+                }
 
-            val totalAnnotations = layers.sumOf { it.annotations.size }
-            if (totalAnnotations > 0 || isDrawing) {
-                Logger.v(TAG, "Drew $totalAnnotations annotations from ${layers.size} visible layers (drawing=$isDrawing)")
-            }
+                val totalAnnotations = sortedLayers.sumOf { it.annotations.size }
+                if (totalAnnotations > 0 || isDrawing) {
+                    Logger.v(TAG, "Drew $totalAnnotations annotations from ${sortedLayers.size} visible layers (drawing=$isDrawing)")
+                }
 
-        } finally {
-            canvas.restore()
+            } finally {
+            }
         }
     }
 
@@ -307,9 +334,10 @@ class AnnotationCanvasView(context: Context) : View(context) {
      * Dessine le trait en cours de dessin (avant lissage)
      */
     private fun drawTemporaryDrawing(canvas: Canvas, points: List<PointF>) {
+        val tools = toolsManager ?: return
         val paint = Paint().apply {
-            color = toolsManager.activeColor
-            strokeWidth = toolsManager.strokeWidth
+            color = tools.activeColor
+            strokeWidth = tools.strokeWidth
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
@@ -329,11 +357,12 @@ class AnnotationCanvasView(context: Context) : View(context) {
     }
 
     private fun applyMapTransformations(canvas: Canvas) {
-        val scale = mapView.scale
-        val center = mapView.center ?: return
+        val map = mapView ?: return
+        val scale = map.scale
+        val center = map.center ?: return
 
-        val viewWidth = mapView.width.toFloat()
-        val viewHeight = mapView.height.toFloat()
+        val viewWidth = map.width.toFloat()
+        val viewHeight = map.height.toFloat()
 
         val offsetX = viewWidth / 2f - center.x * scale
         val offsetY = viewHeight / 2f - center.y * scale
@@ -458,10 +487,12 @@ class AnnotationCanvasView(context: Context) : View(context) {
     private fun handleDrawingToolUp() {
         if (!isDrawing) return
 
+        val tools = toolsManager ?: return
+        val layers = layerManager ?: return
+
         Logger.d(TAG, "Drawing ended: ${currentDrawingPoints.size} points")
 
         if (currentDrawingPoints.size >= 2) {
-            // Appliquer lissage Douglas-Peucker
             val smoothedPoints = DouglasPeucker.simplify(currentDrawingPoints, SMOOTHING_EPSILON)
 
             val reduction = DouglasPeucker.calculateReduction(
@@ -469,39 +500,34 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 smoothedPoints.size
             )
 
-            Logger.i(TAG, "Drawing smoothed: ${currentDrawingPoints.size} → ${smoothedPoints.size} points (${reduction.toInt()}% reduction)")
+            Logger.i(TAG, "Drawing smoothed: ${currentDrawingPoints.size} -> ${smoothedPoints.size} points (${reduction.toInt()}% reduction)")
 
-            // Créer annotation
             val drawing = AnnotationEdit.Drawing(
                 points = smoothedPoints,
-                strokeWidth = toolsManager.strokeWidth,
+                strokeWidth = tools.strokeWidth,
                 color = com.brewdog.catamap.domain.annotation.models.AnnotationColor.fromBaseColor(
-                    toolsManager.activeColor,
+                    tools.activeColor,
                     isDarkMode
                 )
             )
 
-            // Ajouter au calque actif
-            val activeLayerId = toolsManager.activeLayerId
+            val activeLayerId = tools.activeLayerId
             if (activeLayerId == null) {
                 Logger.e(TAG, "No active layer")
             } else {
-                val activeLayer = layerManager.getLayers().find { it.id == activeLayerId }
+                val activeLayer = layers.getLayers().find { it.id == activeLayerId }
                 if (activeLayer == null) {
                     Logger.e(TAG, "Active layer not found: $activeLayerId")
                 } else {
                     activeLayer.addAnnotation(drawing)
                     Logger.i(TAG, "Drawing annotation created: ${smoothedPoints.size} points on layer ${activeLayer.name}")
-
-                    // Sauvegarder
-                    layerManager.saveAnnotations()
+                    layers.saveAnnotations()
                 }
             }
         } else {
             Logger.d(TAG, "Drawing ignored: not enough points (${currentDrawingPoints.size})")
         }
 
-        // Reset état dessin
         isDrawing = false
         currentDrawingPoints.clear()
         invalidate()
@@ -510,11 +536,12 @@ class AnnotationCanvasView(context: Context) : View(context) {
     // ========== OUTIL TEXTE ==========
 
     private fun handleTextToolDown(imagePoint: PointF) {
+        val tools = toolsManager ?: return
         val tappedText = findTextAnnotationAtPoint(imagePoint)
 
         if (tappedText != null) {
             val (text, layer) = tappedText
-            val activeLayerId = toolsManager.activeLayerId
+            val activeLayerId = tools.activeLayerId
 
             if (layer.id == activeLayerId) {
                 touchMode = TouchMode.WAITING
@@ -578,6 +605,7 @@ class AnnotationCanvasView(context: Context) : View(context) {
     }
 
     private fun saveDraggedTextPosition(newPosition: PointF) {
+        val layers = layerManager ?: return
         val (text, layer) = draggedTextAndLayer ?: return
 
         val updatedText = text.copy(position = newPosition)
@@ -585,7 +613,7 @@ class AnnotationCanvasView(context: Context) : View(context) {
         layer.removeAnnotation(text.id)
         layer.addAnnotation(updatedText)
 
-        layerManager.saveAnnotations()
+        layers.saveAnnotations()
 
         Logger.i(TAG, "Text moved: \"${text.content}\" from ${text.position} to $newPosition")
 
@@ -599,7 +627,8 @@ class AnnotationCanvasView(context: Context) : View(context) {
     }
 
     private fun findTextAnnotationAtPoint(point: PointF): Pair<AnnotationEdit.Text, Layer>? {
-        val allLayers = layerManager.getLayers()
+        val layers = layerManager ?: return null
+        val allLayers = layers.getLayers()
         val visibleLayers = allLayers.filter { it.isVisible }.sortedBy { it.zIndex }
 
         for (layer in visibleLayers.reversed()) {
@@ -641,8 +670,9 @@ class AnnotationCanvasView(context: Context) : View(context) {
     }
 
     private fun screenToImageCoordinates(screenPoint: PointF): PointF {
-        val scale = mapView.scale
-        val center = mapView.center ?: return PointF(0f, 0f)
+        val map = mapView ?: return PointF(0f, 0f)
+        val scale = map.scale
+        val center = map.center ?: return PointF(0f, 0f)
 
         val viewWidth = width.toFloat()
         val viewHeight = height.toFloat()
@@ -678,13 +708,16 @@ class AnnotationCanvasView(context: Context) : View(context) {
         position: PointF,
         existingText: AnnotationEdit.Text?
     ) {
-        val activeLayerId = toolsManager.activeLayerId
+        val tools = toolsManager ?: return
+        val layers = layerManager ?: return
+
+        val activeLayerId = tools.activeLayerId
         if (activeLayerId == null) {
             Logger.e(TAG, "No active layer")
             return
         }
 
-        val activeLayer = layerManager.getLayers().find { it.id == activeLayerId }
+        val activeLayer = layers.getLayers().find { it.id == activeLayerId }
         if (activeLayer == null) {
             Logger.e(TAG, "Active layer not found: $activeLayerId")
             return
@@ -698,10 +731,10 @@ class AnnotationCanvasView(context: Context) : View(context) {
                 val updatedText = existingText.copy(content = text)
                 activeLayer.removeAnnotation(existingText.id)
                 activeLayer.addAnnotation(updatedText)
-                Logger.i(TAG, "Text annotation updated: \"${existingText.content}\" → \"$text\"")
+                Logger.i(TAG, "Text annotation updated: \"${existingText.content}\" -> \"$text\"")
             }
 
-            layerManager.saveAnnotations()
+            layers.saveAnnotations()
             invalidate()
 
         } else {
@@ -713,9 +746,9 @@ class AnnotationCanvasView(context: Context) : View(context) {
             val annotation = AnnotationEdit.Text(
                 content = text,
                 position = position,
-                fontSize = toolsManager.textSize.toFloat(),
+                fontSize = tools.textSize.toFloat(),
                 color = com.brewdog.catamap.domain.annotation.models.AnnotationColor.fromBaseColor(
-                    toolsManager.activeColor,
+                    tools.activeColor,
                     isDarkMode
                 )
             )
@@ -723,7 +756,7 @@ class AnnotationCanvasView(context: Context) : View(context) {
             activeLayer.addAnnotation(annotation)
             Logger.i(TAG, "Text annotation created: \"$text\" at $position")
 
-            layerManager.saveAnnotations()
+            layers.saveAnnotations()
             invalidate()
         }
     }
@@ -761,17 +794,17 @@ class AnnotationCanvasView(context: Context) : View(context) {
      * Gère le down pour l'outil gomme
      */
     private fun handleEraserToolDown(point: PointF) {
+        val tools = toolsManager ?: return
+
         isErasing = true
         eraserPosition = point
 
-        // Vérifier si on tape sur un texte
         val tappedText = findTextAnnotationAtPoint(point)
         if (tappedText != null) {
             val (text, layer) = tappedText
-            val activeLayerId = toolsManager.activeLayerId
+            val activeLayerId = tools.activeLayerId
 
             if (layer.id == activeLayerId) {
-                // Texte sur calque actif → Dialog de confirmation
                 showEraseTextDialog(text, layer)
                 Logger.d(TAG, "Eraser tapped on text: \"${text.content}\"")
             } else {
@@ -787,7 +820,6 @@ class AnnotationCanvasView(context: Context) : View(context) {
             return
         }
 
-        // Marquer les points de dessin à supprimer
         checkAndMarkPointsForRemoval(point)
         invalidate()
 
@@ -827,8 +859,11 @@ class AnnotationCanvasView(context: Context) : View(context) {
      * Vérifie et marque les points de dessin à supprimer
      */
     private fun checkAndMarkPointsForRemoval(eraserCenter: PointF) {
-        val activeLayerId = toolsManager.activeLayerId ?: return
-        val activeLayer = layerManager.getLayers().find { it.id == activeLayerId } ?: return
+        val tools = toolsManager ?: return
+        val layers = layerManager ?: return
+
+        val activeLayerId = tools.activeLayerId ?: return
+        val activeLayer = layers.getLayers().find { it.id == activeLayerId } ?: return
 
         activeLayer.annotations.forEach { annotation ->
             if (annotation is AnnotationEdit.Drawing) {
@@ -846,10 +881,12 @@ class AnnotationCanvasView(context: Context) : View(context) {
      * Applique la suppression des points marqués et découpe les dessins
      */
     private fun applyErasure() {
-        val activeLayerId = toolsManager.activeLayerId ?: return
-        val activeLayer = layerManager.getLayers().find { it.id == activeLayerId } ?: return
+        val tools = toolsManager ?: return
+        val layers = layerManager ?: return
 
-        // Grouper les points par dessin
+        val activeLayerId = tools.activeLayerId ?: return
+        val activeLayer = layers.getLayers().find { it.id == activeLayerId } ?: return
+
         val pointsByDrawing = pointsToRemove.groupBy { it.drawingId }
 
         pointsByDrawing.forEach { (drawingId, removedPoints) ->
@@ -860,23 +897,19 @@ class AnnotationCanvasView(context: Context) : View(context) {
             if (drawing != null) {
                 val removedIndices = removedPoints.map { it.pointIndex }.toSet()
 
-                // Découper le dessin en segments
                 val newDrawings = splitDrawing(drawing, removedIndices)
 
-                // Supprimer l'ancien dessin
                 activeLayer.removeAnnotation(drawingId)
 
-                // Ajouter les nouveaux segments
                 newDrawings.forEach { newDrawing ->
                     activeLayer.addAnnotation(newDrawing)
                 }
 
-                Logger.i(TAG, "Drawing split: 1 → ${newDrawings.size} segments")
+                Logger.i(TAG, "Drawing split: 1 -> ${newDrawings.size} segments")
             }
         }
 
-        // Sauvegarder
-        layerManager.saveAnnotations()
+        layers.saveAnnotations()
     }
 
     /**
@@ -920,12 +953,13 @@ class AnnotationCanvasView(context: Context) : View(context) {
      * Affiche le dialog de confirmation pour supprimer un texte
      */
     private fun showEraseTextDialog(text: AnnotationEdit.Text, layer: Layer) {
+        val layers = layerManager ?: return
+
         val dialog = EraseTextConfirmDialog.newInstance(
             textContent = text.content,
             onConfirm = {
-                // Supprimer le texte
                 layer.removeAnnotation(text.id)
-                layerManager.saveAnnotations()
+                layers.saveAnnotations()
                 invalidate()
 
                 Logger.i(TAG, "Text erased: \"${text.content}\" from layer ${layer.name}")

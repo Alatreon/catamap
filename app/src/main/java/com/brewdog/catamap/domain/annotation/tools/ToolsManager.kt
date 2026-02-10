@@ -3,9 +3,10 @@ package com.brewdog.catamap.domain.annotation.tools
 import android.content.Context
 import android.content.SharedPreferences
 import com.brewdog.catamap.constants.AnnotationConstants
-import com.brewdog.catamap.domain.annotation.tools.ToolType.Companion.getLabel
-import com.brewdog.catamap.domain.annotation.tools.ToolType.Companion.locksNavigation
-import com.brewdog.catamap.domain.annotation.tools.ToolType.Companion.showsColor
+import com.brewdog.catamap.ui.annotation.tools.ToolType
+import com.brewdog.catamap.ui.annotation.tools.ToolType.Companion.getLabel
+import com.brewdog.catamap.ui.annotation.tools.ToolType.Companion.locksNavigation
+import com.brewdog.catamap.ui.annotation.tools.ToolType.Companion.showsColor
 import com.brewdog.catamap.utils.logging.Logger
 
 /**

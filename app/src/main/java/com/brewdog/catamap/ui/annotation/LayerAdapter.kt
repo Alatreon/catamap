@@ -35,8 +35,8 @@ class LayerAdapter(
     /**
      * Met à jour la liste des calques
      */
-    fun updateLayers(newLayers: List<Layer>, activeId: String?) {
-        Logger.entry(TAG, "updateLayers", "count=${newLayers.size}")
+    fun updateLayers(newLayers: List<Layer>?, activeId: String?) {
+        Logger.entry(TAG, "updateLayers", "count=${newLayers?.size}")
 
         layers.clear()
         layers.addAll(newLayers)
@@ -175,3 +175,5 @@ class LayerAdapter(
         }
     }
 }
+
+private fun MutableList<Layer>.addAll(elements: List<Layer>?) {}
