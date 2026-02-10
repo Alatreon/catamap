@@ -62,8 +62,12 @@ object MinimapGenerator {
             // 4. Redimensionner au ratio exact
             minimapBitmap = sourceBitmap.scale(minimapWidth, minimapHeight)
 
-            // 5. Sauvegarder en PNG (lossless, important pour les cartes)
-            val outputFile = File(context.cacheDir, "minimap_${System.currentTimeMillis()}.png")
+            // 5. Sauvegarder en PNG (lossless, important pour les cartes) dans un dossier permanent
+            val minimapsDir = File(context.filesDir, "minimaps")
+            if (!minimapsDir.exists()) {
+                minimapsDir.mkdirs()
+            }
+            val outputFile = File(minimapsDir, "minimap_${System.currentTimeMillis()}.png")
             FileOutputStream(outputFile).use { out ->
                 minimapBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }

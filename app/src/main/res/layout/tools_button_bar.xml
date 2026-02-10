@@ -2,6 +2,7 @@
 <!-- Barre d'outils avec 5 boutons -->
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/toolBarRoot"
     android:layout_width="match_parent"
     android:layout_height="72dp"
@@ -27,8 +28,8 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:src="@drawable/ic_tool_text"
-            android:tint="@android:color/white"
-            android:contentDescription="Texte"/>
+            android:contentDescription="@string/texte"
+            app:tint="@android:color/white" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -57,8 +58,8 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:src="@drawable/ic_tool_draw"
-            android:tint="@android:color/white"
-            android:contentDescription="Dessin"/>
+            android:contentDescription="@string/dessin"
+            app:tint="@android:color/white" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -87,8 +88,8 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:src="@drawable/ic_tool_color"
-            android:tint="@android:color/white"
-            android:contentDescription="Couleur"/>
+            android:contentDescription="@string/couleur"
+            app:tint="@android:color/white" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -117,8 +118,8 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:src="@drawable/ic_tool_eraser"
-            android:tint="@android:color/white"
-            android:contentDescription="Gomme"/>
+            android:contentDescription="@string/gomme"
+            app:tint="@android:color/white" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -147,8 +148,8 @@
             android:layout_width="32dp"
             android:layout_height="32dp"
             android:src="@drawable/ic_tool_close"
-            android:tint="@android:color/white"
-            android:contentDescription="Fermer"/>
+            android:contentDescription="@string/fermer"
+            app:tint="@android:color/white" />
 
         <TextView
             android:layout_width="wrap_content"

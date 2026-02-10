@@ -2,7 +2,6 @@ package com.brewdog.catamap.ui.annotation
 
 import android.app.Dialog
 import android.os.Bundle
-import android.text.InputType
 import android.view.ContextThemeWrapper
 import android.widget.EditText
 import androidx.appcompat.app.AlertDialog
@@ -20,11 +19,13 @@ class AddLayerDialog : DialogFragment() {
         private const val TAG = "AddLayerDialog"
 
         fun newInstance(
-            existingNames: List<String>,
+            existingNames: List<String>?,
             onConfirm: (String) -> Unit
         ): AddLayerDialog {
             return AddLayerDialog().apply {
-                this.existingNames = existingNames
+                if (existingNames != null) {
+                    this.existingNames = existingNames
+                }
                 this.onConfirm = onConfirm
             }
         }

@@ -40,6 +40,7 @@ import androidx.lifecycle.lifecycleScope
 import com.brewdog.catamap.ui.onboarding.OnboardingActivity
 import com.brewdog.catamap.ui.onboarding.OnboardingManager
 import kotlinx.coroutines.launch
+import androidx.core.content.edit
 
 
 /**
@@ -58,6 +59,9 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     companion object {
         private const val TAG = "MainActivity"
     }
+
+    private val KEY_CURRENT_MAP_ID = "current_map_id"
+    private val KEY_IS_DARK_MODE = "is_dark_mode"
 
     // Repository
     private lateinit var repository: MapRepository
@@ -91,12 +95,43 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     private var preEditState: PreEditState? = null
     private var annotationOverlay: AnnotationOverlay? = null
 
+    /**
+     * Fournit acces au ToolsManager pour les fragments
+     */
+    fun getToolsManager(): ToolsManager? {
+        return if (::toolsManager.isInitialized) toolsManager else null
+    }
+
+    /**
+     * Fournit acces au LayerManager pour les fragments
+     */
+    fun getLayerManager(): LayerManager? {
+        return layerManager
+    }
+
+    /**
+     * Fournit acces a la MapView pour les fragments
+     */
+    fun getMapView(): SubsamplingScaleImageView? {
+        return if (::mapView.isInitialized) mapView else null
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Logger.entry(TAG, "onCreate")
         checkOnboarding()
 
         setContentView(R.layout.activity_main)
+
+        if (savedInstanceState != null) {
+            savedMapId = savedInstanceState.getString(KEY_CURRENT_MAP_ID)
+            savedDarkMode = if (savedInstanceState.containsKey(KEY_IS_DARK_MODE)) {
+                savedInstanceState.getBoolean(KEY_IS_DARK_MODE)
+            } else {
+                null
+            }
+            Logger.d(TAG, "Restored saved state: mapId=$savedMapId, darkMode=$savedDarkMode")
+        }
 
         // Initialiser les vues
         initViews()
@@ -110,6 +145,20 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         setupWindowInsets()
         setupGestureDetectors()
         setupMenu()
+
+        // Nettoyer les fragments restaures par Android apres rotation
+        supportFragmentManager.findFragmentByTag("AnnotationOverlay")?.let { fragment ->
+            supportFragmentManager.beginTransaction()
+                .remove(fragment)
+                .commitNow()
+            Logger.d(TAG, "Cleaned up restored AnnotationOverlay fragment")
+        }
+        supportFragmentManager.findFragmentByTag("ToolsOverlay")?.let { fragment ->
+            supportFragmentManager.beginTransaction()
+                .remove(fragment)
+                .commitNow()
+            Logger.d(TAG, "Cleaned up restored ToolsOverlay fragment")
+        }
 
         // Charger la carte
         loadInitialMap()
@@ -381,20 +430,25 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
     /**
      * Charge la carte initiale
      */
+
+    private var savedMapId: String? = null
+    private var savedDarkMode: Boolean? = null
+
     private fun loadInitialMap() {
         Logger.entry(TAG, "loadInitialMap")
 
-        // Nettoyer l'ancien LayerManager si on change de carte
         layerManager?.cleanup()
         layerManager = null
 
         val database = repository.loadDatabase()
 
-        // Récupérer la carte depuis l'intent ou la carte par défaut
+        // Priorite : 1) intent, 2) etat sauvegarde (rotation), 3) carte par defaut
         val selectedMapId = intent.getStringExtra(AppConstants.Intent.EXTRA_SELECTED_MAP_ID)
+            ?: savedMapId
+
         val map = if (selectedMapId != null) {
             database.getMapById(selectedMapId).also {
-                Logger.i(TAG, "Loading map from intent: ${it?.name}")
+                Logger.i(TAG, "Loading map from intent/saved state: ${it?.name}")
             }
         } else {
             database.getDefaultMap().also {
@@ -403,6 +457,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         } ?: database.maps.firstOrNull().also {
             Logger.i(TAG, "Loading first available map: ${it?.name}")
         }
+
 
         if (map == null) {
             Logger.w(TAG, "No map available - showing empty state")
@@ -420,7 +475,13 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         // Charger la carte
         mapLoader.startLoading(map)
         Logger.d(TAG, "Calling loadMap on controller...")
-        mapViewController.loadMap(map, darkMode = getCurrentDarkMode())
+        val darkMode = savedDarkMode ?: getCurrentDarkMode()
+        mapViewController.loadMap(map, darkMode = darkMode)
+
+        // Reinitialiser les valeurs sauvegardees apres utilisation
+        savedMapId = null
+        savedDarkMode = null
+
 
         layerManager = LayerManager(annotationRepository, lifecycleScope)
         lifecycleScope.launch {
@@ -488,8 +549,16 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             return
         }
 
-        // Ne créer l'overlay qu'une seule fois
-        if (annotationOverlay == null) {
+        // Supprimer l'ancien overlay s'il existe (peut arriver apres rotation)
+        val existingFragment = supportFragmentManager.findFragmentByTag("AnnotationOverlay")
+        if (existingFragment != null) {
+            supportFragmentManager.beginTransaction()
+                .remove(existingFragment)
+                .commitNow()
+            Logger.d(TAG, "Removed existing AnnotationOverlay fragment")
+        }
+        annotationOverlay = null
+
             annotationOverlay = AnnotationOverlay.newInstance(
                 mapId = currentMap.id,
                 isDarkMode = mapViewController.isDarkModeEnabled(),
@@ -504,10 +573,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
                 .commit()
             supportFragmentManager.executePendingTransactions()
             Logger.i(TAG, "AnnotationOverlay created (permanent)")
-        }else {
-            // SI CETTE BRANCHE S'EXÉCUTE, il y a un problème
-            Logger.w(TAG, "AnnotationOverlay already exists, skipping creation")
-        }
+
 
         Logger.exit(TAG, "showAnnotationOverlay")
     }
@@ -545,13 +611,10 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         val newMode = !mapViewController.isDarkModeEnabled()
 
         val sharedPrefs = getSharedPreferences("map_settings", MODE_PRIVATE)
-        sharedPrefs.edit().putBoolean("is_dark_mode", newMode).apply()
+        sharedPrefs.edit { putBoolean("is_dark_mode", newMode) }
         Logger.i(TAG, "Dark mode preference saved: $newMode")
 
-        annotationOverlay?.updateDarkMode(newMode)
-
-
-        Logger.i(TAG, "Toggling dark mode: ${mapViewController.isDarkModeEnabled()} → $newMode")
+        Logger.i(TAG, "Toggling dark mode: ${mapViewController.isDarkModeEnabled()} -> $newMode")
 
         loadingOverlay.visibility = View.VISIBLE
         loadingOverlay.alpha = 1f
@@ -567,6 +630,10 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
                 }
                 .start()
 
+            // Mettre a jour le mode sombre de l'overlay APRES que la carte soit prete
+            annotationOverlay?.updateDarkMode(newMode)
+            annotationOverlay?.refresh()
+
             // Appeler le callback original
             originalOnMapReady?.invoke()
 
@@ -577,7 +644,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         // Changer le mode
         mapViewController.switchMode(newMode)
 
-        // Mettre à jour la minimap si activée
+        // Mettre a jour la minimap si activee
         if (minimapEnabled) {
             loadMinimapForCurrentMap()
         }
@@ -704,6 +771,22 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         super.onDestroy()
         Logger.exit(TAG, "onDestroy")
     }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        Logger.entry(TAG, "onSaveInstanceState")
+
+        // Sauvegarder l'ID de la carte actuelle
+        val currentMap = mapViewController.getCurrentMap()
+        if (currentMap != null) {
+            outState.putString(KEY_CURRENT_MAP_ID, currentMap.id)
+            outState.putBoolean(KEY_IS_DARK_MODE, mapViewController.isDarkModeEnabled())
+            Logger.d(TAG, "Saved map state: id=${currentMap.id}, darkMode=${mapViewController.isDarkModeEnabled()}")
+        }
+
+        Logger.exit(TAG, "onSaveInstanceState")
+    }
+
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -847,58 +930,6 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         }
     }
 
-    /**
-     * Affiche l'overlay des outils
-     */
-    /*fun showToolsOverlay() {
-        Logger.entry(TAG, "showToolsOverlay")
-        // AJOUTER CE LOG
-        Logger.d(TAG, "annotationOverlay before: $annotationOverlay")
-
-
-        val currentMap = mapViewController.getCurrentMap()
-        if (currentMap == null) {
-            Logger.w(TAG, "No map loaded")
-            return
-        }
-
-        if (layerManager == null) {
-            Logger.e(TAG, "LayerManager not available")
-            return
-        }
-
-        enterEditMode()
-
-        val activeLayer = layerManager!!.getActiveLayer()
-        if (activeLayer == null) {
-            Logger.w(TAG, "No active layer available")
-            exitEditMode()
-            return
-        }
-
-        // Créer l'overlay d'annotations
-        annotationOverlay = AnnotationOverlay.newInstance(
-            mapId = currentMap.id,
-            isDarkMode = mapViewController.isDarkModeEnabled(),
-            toolsManager = toolsManager,
-            layerManager = layerManager!!,
-            mapView = mapView
-        )
-
-        // Ajouter l'overlay d'annotations au rootContainer
-        supportFragmentManager.beginTransaction()
-            .add(R.id.rootContainer, annotationOverlay!!, "AnnotationOverlay")
-            .commit()
-
-        // Créer et ajouter l'overlay des outils
-        toolsOverlay = ToolsOverlay.newInstance(currentMap.id, toolsManager, layerManager!!)
-
-        supportFragmentManager.beginTransaction()
-            .add(R.id.rootContainer, toolsOverlay!!, "ToolsOverlay")
-            .commit()
-
-        Logger.i(TAG, "Tools overlay and annotation overlay shown")
-    }*/
     fun showToolsOverlay() {
         Logger.entry(TAG, "showToolsOverlay")
 

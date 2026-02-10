@@ -15,10 +15,10 @@
         android:layout_height="120dp"
         android:layout_marginTop="48dp"
         android:contentDescription="@string/onboarding_icon_description"
-        android:tint="@color/onboarding_accent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:tint="@color/onboarding_accent"
         tools:src="@drawable/ic_legal" />
 
     <!-- Titre -->

@@ -2,6 +2,7 @@
 <!-- Bandeau d'indicateurs en haut de l'écran -->
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/indicatorBarRoot"
     android:layout_width="match_parent"
     android:layout_height="48dp"
@@ -17,8 +18,8 @@
         android:layout_width="24dp"
         android:layout_height="24dp"
         android:src="@drawable/ic_tool_text"
-        android:tint="@android:color/white"
-        android:contentDescription="Icône outil"/>
+        android:contentDescription="Icône outil"
+        app:tint="@android:color/white" />
 
     <!-- Nom de l'outil actif -->
     <TextView

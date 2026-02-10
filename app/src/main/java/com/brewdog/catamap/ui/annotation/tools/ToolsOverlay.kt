@@ -18,9 +18,9 @@ import com.brewdog.catamap.constants.AnnotationConstants
 import com.brewdog.catamap.domain.annotation.LayerChangeListener
 import com.brewdog.catamap.domain.annotation.LayerManager
 import com.brewdog.catamap.domain.annotation.models.Layer
-import com.brewdog.catamap.domain.annotation.tools.ToolType
-import com.brewdog.catamap.domain.annotation.tools.ToolType.Companion.getLabel
-import com.brewdog.catamap.domain.annotation.tools.ToolType.Companion.showsColor
+import com.brewdog.catamap.ui.annotation.tools.ToolType
+import com.brewdog.catamap.ui.annotation.tools.ToolType.Companion.getLabel
+import com.brewdog.catamap.ui.annotation.tools.ToolType.Companion.showsColor
 import com.brewdog.catamap.domain.annotation.tools.ToolsManager
 import com.brewdog.catamap.domain.annotation.tools.ToolsStateListener
 import com.brewdog.catamap.utils.logging.Logger

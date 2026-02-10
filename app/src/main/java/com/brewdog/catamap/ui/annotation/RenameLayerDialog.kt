@@ -23,7 +23,7 @@ class RenameLayerDialog : DialogFragment() {
         fun newInstance(
             layerId: String,
             currentName: String,
-            existingNames: List<String>,
+            existingNames: List<String>?,
             onConfirm: (String) -> Unit
         ): RenameLayerDialog {
             return RenameLayerDialog().apply {
@@ -31,7 +31,9 @@ class RenameLayerDialog : DialogFragment() {
                     putString(ARG_LAYER_ID, layerId)
                     putString(ARG_CURRENT_NAME, currentName)
                 }
-                this.existingNames = existingNames
+                if (existingNames != null) {
+                    this.existingNames = existingNames
+                }
                 this.onConfirm = onConfirm
             }
         }
