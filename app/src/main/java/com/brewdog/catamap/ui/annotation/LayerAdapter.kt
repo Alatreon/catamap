@@ -38,13 +38,46 @@ class LayerAdapter(
     fun updateLayers(newLayers: List<Layer>?, activeId: String?) {
         Logger.entry(TAG, "updateLayers", "count=${newLayers?.size}")
 
+        val oldSize = layers.size
+        val newSize = newLayers?.size ?: 0
+
         layers.clear()
-        layers.addAll(newLayers)
+        newLayers?.let { layers.addAll(it) }
         activeLayerId = activeId
 
-        notifyDataSetChanged()
+        when {
+            oldSize == 0 && newSize > 0 -> {
+                notifyItemRangeInserted(0, newSize)
+            }
+            oldSize > 0 && newSize == 0 -> {
+                notifyItemRangeRemoved(0, oldSize)
+            }
+            newSize > oldSize -> {
+                notifyItemRangeChanged(0, oldSize)
+                notifyItemRangeInserted(oldSize, newSize - oldSize)
+            }
+            newSize < oldSize -> {
+                notifyItemRangeChanged(0, newSize)
+                notifyItemRangeRemoved(newSize, oldSize - newSize)
+            }
+            else -> {
+                notifyItemRangeChanged(0, newSize)
+            }
+        }
 
         Logger.d(TAG, "Layers updated: ${layers.map { it.name }}")
+    }
+
+    /**
+     * Deplace un item dans la liste (pour le drag & drop)
+     */
+    fun moveItem(fromPosition: Int, toPosition: Int) {
+        if (fromPosition < 0 || fromPosition >= layers.size) return
+        if (toPosition < 0 || toPosition >= layers.size) return
+
+        val item = layers.removeAt(fromPosition)
+        layers.add(toPosition, item)
+        notifyItemMoved(fromPosition, toPosition)
     }
 
     /**
@@ -77,6 +110,7 @@ class LayerAdapter(
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btnDelete)
 
         private var lastClickTime = 0L
+
 
         fun bind(layer: Layer) {
             Logger.v(TAG, "Binding layer: ${layer.name}")
@@ -176,4 +210,3 @@ class LayerAdapter(
     }
 }
 
-private fun MutableList<Layer>.addAll(elements: List<Layer>?) {}

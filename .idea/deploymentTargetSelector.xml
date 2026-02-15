@@ -15,7 +15,7 @@
       </SelectionState>
       <SelectionState runConfigName="Catamap">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-02-04T22:17:15.927789500Z">
+        <DropdownSelection timestamp="2026-02-11T00:33:51.266757100Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=C:\Users\Arnaud\.android\avd\Pixel_8_Pro.avd" />

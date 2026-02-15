@@ -13,7 +13,8 @@ import com.brewdog.catamap.utils.logging.Logger
  * - Déclenchement via drag handle uniquement
  */
 class LayerItemTouchHelper(
-    private val onMove: (fromPosition: Int, toPosition: Int) -> Unit
+    private val onMoveItem: (fromPosition: Int, toPosition: Int) -> Unit,
+    private val onDragEnd: () -> Unit
 ) : ItemTouchHelper.Callback() {
 
     companion object {
@@ -57,10 +58,10 @@ class LayerItemTouchHelper(
         val fromPosition = viewHolder.bindingAdapterPosition
         val toPosition = target.bindingAdapterPosition
 
-        Logger.v(TAG, "onMove: $fromPosition → $toPosition")
+        Logger.v(TAG, "onMove: $fromPosition -> $toPosition")
 
-        // Notifier le callback
-        onMove(fromPosition, toPosition)
+        // Deplacer visuellement dans l'adapter (sans sauvegarder)
+        onMoveItem(fromPosition, toPosition)
 
         return true
     }
@@ -71,8 +72,8 @@ class LayerItemTouchHelper(
     override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
         // Pas utilisé
     }
-
-    /**
+    
+        /**
      * Change l'apparence de l'item pendant le drag
      */
     override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
@@ -96,6 +97,9 @@ class LayerItemTouchHelper(
         // Restaurer l'apparence normale
         viewHolder.itemView.alpha = 1.0f
         viewHolder.itemView.elevation = 0f
+
+        // Sauvegarder le nouvel ordre seulement a la fin du drag
+        onDragEnd()
 
         Logger.v(TAG, "Drag ended")
     }

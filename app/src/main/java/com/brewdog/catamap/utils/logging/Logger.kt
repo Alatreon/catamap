@@ -1,16 +1,17 @@
 package com.brewdog.catamap.utils.logging
 
 import android.util.Log
+import com.brewdog.catamap.BuildConfig
 
 /**
  * Logger centralisé pour toute l'application
  * Permet de contrôler facilement le niveau de logs et d'ajouter des préfixes
  */
 object Logger {
-    
     private const val APP_TAG = "CataMap"
-    private var isDebugEnabled = true
-    private var isVerboseEnabled = true
+
+    private var isDebugEnabled = BuildConfig.DEBUG
+    private var isVerboseEnabled = BuildConfig.DEBUG
     
     enum class Level {
         VERBOSE, DEBUG, INFO, WARN, ERROR
@@ -62,6 +63,7 @@ object Logger {
      * Log INFO - Informations importantes (changements d'état)
      */
     fun i(tag: String, message: String, throwable: Throwable? = null) {
+        if (!isDebugEnabled) return
         val fullTag = "$APP_TAG:$tag"
         if (throwable != null) {
             Log.i(fullTag, message, throwable)
@@ -74,6 +76,7 @@ object Logger {
      * Log WARNING - Situations anormales mais gérables
      */
     fun w(tag: String, message: String, throwable: Throwable? = null) {
+        if (!isDebugEnabled) return
         val fullTag = "$APP_TAG:$tag"
         if (throwable != null) {
             Log.w(fullTag, message, throwable)
@@ -86,6 +89,7 @@ object Logger {
      * Log ERROR - Erreurs critiques
      */
     fun e(tag: String, message: String, throwable: Throwable? = null) {
+        if (!isDebugEnabled) return
         val fullTag = "$APP_TAG:$tag"
         if (throwable != null) {
             Log.e(fullTag, message, throwable)
@@ -126,6 +130,7 @@ object Logger {
      * Log une métrique de performance
      */
     fun perf(tag: String, operation: String, durationMs: Long) {
+        if (!isDebugEnabled) return
         i(tag, "$operation took ${durationMs}ms")
     }
     

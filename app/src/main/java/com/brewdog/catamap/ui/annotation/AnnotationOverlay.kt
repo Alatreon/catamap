@@ -178,7 +178,9 @@ class AnnotationOverlay : Fragment(), ToolsStateListener, LayerChangeListener {
     }
 
     fun refresh() {
-        canvasView.invalidate()
+        mapView?.post {
+            canvasView.invalidate()
+        }
     }
 
     override fun onDestroyView() {
@@ -356,13 +358,21 @@ class AnnotationCanvasView(context: Context) : View(context) {
         Logger.v(TAG, "Drew temporary drawing: ${points.size} points")
     }
 
+
+
     private fun applyMapTransformations(canvas: Canvas) {
         val map = mapView ?: return
         val scale = map.scale
         val center = map.center ?: return
 
-        val viewWidth = map.width.toFloat()
-        val viewHeight = map.height.toFloat()
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+        val rotation = map.rotation
+
+        Logger.v(TAG, "applyMapTransformations: rotation=$rotation, scale=$scale, center=$center")
+
+        // Appliquer la meme rotation que la mapView
+        canvas.rotate(rotation, viewWidth / 2f, viewHeight / 2f)
 
         val offsetX = viewWidth / 2f - center.x * scale
         val offsetY = viewHeight / 2f - center.y * scale
@@ -677,14 +687,71 @@ class AnnotationCanvasView(context: Context) : View(context) {
         val viewWidth = width.toFloat()
         val viewHeight = height.toFloat()
 
+        // Prendre en compte la rotation de la mapView
+        val rotation = map.rotation
+        var adjustedX = screenPoint.x
+        var adjustedY = screenPoint.y
+
+        if (rotation != 0f) {
+            // Rotation inverse autour du centre de la vue
+            val centerX = viewWidth / 2f
+            val centerY = viewHeight / 2f
+            val radians = Math.toRadians(-rotation.toDouble())
+            val cos = Math.cos(radians).toFloat()
+            val sin = Math.sin(radians).toFloat()
+
+            val dx = screenPoint.x - centerX
+            val dy = screenPoint.y - centerY
+
+            adjustedX = centerX + dx * cos - dy * sin
+            adjustedY = centerY + dx * sin + dy * cos
+        }
+
         val offsetX = viewWidth / 2f - center.x * scale
         val offsetY = viewHeight / 2f - center.y * scale
 
-        val imageX = (screenPoint.x - offsetX) / scale
-        val imageY = (screenPoint.y - offsetY) / scale
+        val imageX = (adjustedX - offsetX) / scale
+        val imageY = (adjustedY - offsetY) / scale
 
         return PointF(imageX, imageY)
     }
+
+    /*private fun screenToImageCoordinates(screenPoint: PointF): PointF {
+        val map = mapView ?: return PointF(0f, 0f)
+        val scale = map.scale
+        val center = map.center ?: return PointF(0f, 0f)
+
+        val viewWidth = width.toFloat()
+        val viewHeight = height.toFloat()
+
+        // Prendre en compte la rotation de la mapView
+        val rotation = map.rotation
+        var adjustedX = screenPoint.x
+        var adjustedY = screenPoint.y
+
+        if (rotation != 0f) {
+            // Rotation inverse autour du centre de la vue
+            val centerX = viewWidth / 2f
+            val centerY = viewHeight / 2f
+            val radians = Math.toRadians(-rotation.toDouble())
+            val cos = Math.cos(radians).toFloat()
+            val sin = Math.sin(radians).toFloat()
+
+            val dx = screenPoint.x - centerX
+            val dy = screenPoint.y - centerY
+
+            adjustedX = centerX + dx * cos - dy * sin
+            adjustedY = centerY + dx * sin + dy * cos
+        }
+
+        val offsetX = viewWidth / 2f - center.x * scale
+        val offsetY = viewHeight / 2f - center.y * scale
+
+        val imageX = (adjustedX - offsetX) / scale
+        val imageY = (adjustedY - offsetY) / scale
+
+        return PointF(imageX, imageY)
+    }*/
 
     private fun showTextEditDialog(position: PointF, existingText: AnnotationEdit.Text?) {
         val fragmentManager = (context as? androidx.fragment.app.FragmentActivity)?.supportFragmentManager

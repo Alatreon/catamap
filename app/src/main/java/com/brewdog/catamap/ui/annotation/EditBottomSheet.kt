@@ -162,10 +162,14 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
         // ItemTouchHelper pour drag & drop
         val callback = LayerItemTouchHelper(
-            onMove = { fromPosition, toPosition ->
-                onLayerMoved(fromPosition, toPosition)
+            onMoveItem = { fromPosition, toPosition ->
+                layerAdapter.moveItem(fromPosition, toPosition)
+            },
+            onDragEnd = {
+                saveLayerOrder()
             }
         )
+
         itemTouchHelper = ItemTouchHelper(callback)
         itemTouchHelper.attachToRecyclerView(layersRecyclerView)
 
@@ -339,6 +343,23 @@ class EditBottomSheet : BottomSheetDialogFragment(), LayerChangeListener {
 
         result.onFailure { error ->
             Logger.e(TAG, "Failed to reorder layers", error)
+            // Recharger l'ordre original
+            onLayersChanged(manager.getLayers(), manager.getActiveLayerId() ?: "")
+        }
+    }
+
+    private fun saveLayerOrder() {
+        val manager = layerManager ?: return
+
+        Logger.v(TAG, "Saving layer order")
+
+        val layers = layerAdapter.getLayers()
+        val result = manager.reorderLayers(layers)
+
+        result.onSuccess {
+            Logger.i(TAG, "Layer order saved")
+        }.onFailure { error ->
+            Logger.e(TAG, "Failed to save layer order", error)
             // Recharger l'ordre original
             onLayersChanged(manager.getLayers(), manager.getActiveLayerId() ?: "")
         }

@@ -4,12 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import androidx.core.graphics.scale
+import com.brewdog.catamap.utils.logging.Logger
 
 /**
  * Générateur de minimap avec redimensionnement intelligent
@@ -41,21 +41,21 @@ object MinimapGenerator {
             // 1. Obtenir les dimensions de l'image source
             val sourceDimensions = getImageDimensions(context, sourceUri)
             if (sourceDimensions == null) {
-                Log.e("MinimapGenerator", "Impossible d'obtenir les dimensions")
+                Logger.e("MinimapGenerator", "Impossible d'obtenir les dimensions")
                 return@withContext null
             }
 
             val (sourceWidth, sourceHeight) = sourceDimensions
-            Log.d("MinimapGenerator", "Source: ${sourceWidth}×${sourceHeight}")
+            Logger.d("MinimapGenerator", "Source: ${sourceWidth}×${sourceHeight}")
 
             // 2. Calculer la taille optimale de la minimap
             val (minimapWidth, minimapHeight) = calculateMinimapSize(sourceWidth, sourceHeight)
-            Log.d("MinimapGenerator", "Minimap: ${minimapWidth}×${minimapHeight}")
+            Logger.d("MinimapGenerator", "Minimap: ${minimapWidth}×${minimapHeight}")
 
             // 3. Charger l'image source avec un sample rate adapté
             sourceBitmap = loadBitmapOptimized(context, sourceUri, minimapWidth, minimapHeight)
             if (sourceBitmap == null) {
-                Log.e("MinimapGenerator", "Impossible de charger l'image source")
+                Logger.e("MinimapGenerator", "Impossible de charger l'image source")
                 return@withContext null
             }
 
@@ -72,12 +72,12 @@ object MinimapGenerator {
                 minimapBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
 
-            Log.d("MinimapGenerator", "Minimap générée: ${outputFile.name}")
+            Logger.d("MinimapGenerator", "Minimap générée: ${outputFile.name}")
 
             return@withContext Uri.fromFile(outputFile)
 
         } catch (e: Exception) {
-            Log.e("MinimapGenerator", "Erreur génération minimap", e)
+            Logger.e("MinimapGenerator", "Erreur génération minimap", e)
             return@withContext null
         } finally {
             // Libérer la mémoire
@@ -112,7 +112,7 @@ object MinimapGenerator {
             }
         }
 
-        Log.d(
+        Logger.d(
             "MinimapGenerator",
             "Source: ${sourceWidth}×${sourceHeight} → Minimap: ${width}×${height} (${(MINIMAP_SCALE_PERCENT * 100).toInt()}%)"
         )
@@ -133,7 +133,7 @@ object MinimapGenerator {
                 Pair(options.outWidth, options.outHeight)
             }
         } catch (e: Exception) {
-            Log.e("MinimapGenerator", "Erreur lecture dimensions", e)
+            Logger.e("MinimapGenerator", "Erreur lecture dimensions", e)
             null
         }
     }
@@ -158,7 +158,7 @@ object MinimapGenerator {
                 targetWidth, targetHeight
             )
 
-            Log.d("MinimapGenerator", "Sample size: $sampleSize")
+            Logger.d("MinimapGenerator", "Sample size: $sampleSize")
 
             // Deuxième passe : charger avec le sample rate
             context.contentResolver.openInputStream(uri)?.use { stream ->
@@ -169,7 +169,7 @@ object MinimapGenerator {
                 BitmapFactory.decodeStream(stream, null, options)
             }
         } catch (e: Exception) {
-            Log.e("MinimapGenerator", "Erreur chargement bitmap", e)
+            Logger.e("MinimapGenerator", "Erreur chargement bitmap", e)
             null
         }
     }
