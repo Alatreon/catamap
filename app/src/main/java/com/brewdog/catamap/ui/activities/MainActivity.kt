@@ -263,6 +263,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
             compassView = compassView,
             onRotationChanged = { angle ->
                 mapViewController.setRotation(angle, rotateWithCompass)
+                annotationOverlay?.refresh()
             }
         )
 
@@ -320,6 +321,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
                 Logger.v(TAG, "Manual rotation: $angle°")
                 val newRotation = mapViewController.getRotation() + angle
                 mapViewController.setRotation(newRotation, manualRotateEnabled)
+                annotationOverlay?.refresh()
             }
         }
 
@@ -493,7 +495,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
                 mapView.postDelayed({
                     annotationOverlay?.refresh()
                     Logger.i(TAG, "Annotations refreshed (second attempt)")
-                }, 2000)
+                }, 1000)
             }
         }
 
@@ -589,6 +591,9 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         } else if (!manualRotateEnabled) {
             mapViewController.setRotationEnabled(false)
         }
+        Logger.d(TAG, "Before refresh - mapView.rotation=${mapView.rotation}")
+        annotationOverlay?.refresh()
+        Logger.d(TAG, "After refresh - mapView.rotation=${mapView.rotation}")
         Logger.i(TAG, "Compass lock: $rotateWithCompass")
         Logger.exit(TAG, "toggleCompassLock")
     }
@@ -601,6 +606,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
         } else if (!rotateWithCompass) {
             mapViewController.setRotationEnabled(false)
         }
+        annotationOverlay?.refresh()
         Logger.i(TAG, "Manual rotate: $manualRotateEnabled")
         Logger.exit(TAG, "toggleManualRotate")
     }
@@ -679,6 +685,7 @@ class MainActivity : AppCompatActivity(), ToolsOverlayListener {
 
         if (manualRotateEnabled) {
             mapViewController.setRotation(0f, manualRotateEnabled)
+            annotationOverlay?.refresh()
 
             Logger.i(TAG, "Rotation reset to 0°")
         } else {

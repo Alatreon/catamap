@@ -9,14 +9,12 @@ import android.widget.ImageView
 import com.brewdog.catamap.constants.AppConstants
 import com.brewdog.catamap.utils.logging.Logger
 import kotlin.math.abs
+import kotlin.math.sign
 
 /**
  * Gestionnaire de la boussole et des capteurs
  * Responsabilité : Gérer l'orientation du device et la rotation de la carte
  */
-
-private const val MIN_ROTATION_DELTA = 5f
-private const val ROTATION_SPEED_DEGREES_PER_UPDATE = 6f
 class CompassManager(
     context: Context,
     private val compassView: ImageView,
@@ -164,30 +162,42 @@ class CompassManager(
      */
     fun getCurrentAzimuth(): Float = azimuthFiltered
 
-    // ========== SensorEventListener ==========
-
     override fun onSensorChanged(event: SensorEvent) {
-        val now = System.currentTimeMillis()
-        
-        // Throttle des updates
-        if (now - lastSensorUpdateTime < sensorUpdateIntervalMs) {
-            return
-        }
-        lastSensorUpdateTime = now
+        // Copier les valeurs des capteurs (toujours, sans throttle)
+        copySensorData(event)
 
-        // Copier les valeurs des capteurs
+        // Calculer l'azimuth
+        val azimuth = calculateAzimuth() ?: return
+
+        // Lisser et appliquer la rotation
+        azimuthFiltered = smoothAngle(azimuth, azimuthFiltered)
+
+        // Mettre a jour la boussole (toujours, sans throttle)
+        updateCompassView()
+
+        // Mettre a jour la carte (avec throttle)
+        updateMapRotation()
+    }
+
+    /**
+     * Copie les donnees des capteurs dans les tableaux
+     */
+    private fun copySensorData(event: SensorEvent) {
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
                 System.arraycopy(event.values, 0, accelerometerReading, 0, 3)
-                // Logger.v(TAG, "Accelerometer: x=${event.values[0]}, y=${event.values[1]}, z=${event.values[2]}")
             }
             Sensor.TYPE_MAGNETIC_FIELD -> {
                 System.arraycopy(event.values, 0, magnetometerReading, 0, 3)
-                // Logger.v(TAG, "Magnetometer: x=${event.values[0]}, y=${event.values[1]}, z=${event.values[2]}")
             }
         }
+    }
 
-        // Calculer la matrice de rotation
+    /**
+     * Calcule l'azimuth a partir des donnees des capteurs
+     * Retourne null si le calcul echoue
+     */
+    private fun calculateAzimuth(): Float? {
         val success = SensorManager.getRotationMatrix(
             rotationMatrix,
             null,
@@ -196,37 +206,69 @@ class CompassManager(
         )
 
         if (!success) {
+            return null
+        }
+
+        SensorManager.getOrientation(rotationMatrix, orientationAngles)
+        return Math.toDegrees(orientationAngles[0].toDouble()).toFloat()
+    }
+
+    /**
+     * Met a jour la rotation de la vue boussole
+     */
+    private fun updateCompassView() {
+        compassView.rotation = -azimuthFiltered
+    }
+
+    /**
+     * Met a jour la rotation de la carte avec throttle et delta minimum
+     */
+    private fun updateMapRotation() {
+        if (!rotateWithCompass) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastMapRotationTime < AppConstants.Compass.MAP_ROTATION_INTERVAL_MS) {
             return
         }
 
-        // Calculer l'orientation
-        SensorManager.getOrientation(rotationMatrix, orientationAngles)
-        val azimuthRad = orientationAngles[0]
-        val azimuthDeg = Math.toDegrees(azimuthRad.toDouble()).toFloat()
+        val newRotation = -azimuthFiltered
+        val delta = abs(newRotation - lastSentRotation)
+        val normalizedDelta = if (delta > 180f) 360f - delta else delta
 
-        // Lisser l'angle
-        azimuthFiltered = smoothAngle(azimuthDeg, azimuthFiltered)
-        
-        // Logger.v(TAG, "Azimuth: raw=$azimuthDeg°, filtered=$azimuthFiltered°")
-
-        // Rotation de la vue boussole
-        compassView.rotation = -azimuthFiltered
-
-        // Rotation de la carte si active et changement d'angle significatif
-        if (rotateWithCompass && now - lastMapRotationTime >= AppConstants.Compass.MAP_ROTATION_INTERVAL_MS) {
-            val newRotation = -azimuthFiltered
-            val delta = Math.abs(newRotation - lastSentRotation)
-
-            // Gerer le cas ou l'angle passe de 359 a 1 (delta reel = 2, pas 358)
-            val normalizedDelta = if (delta > 180f) 360f - delta else delta
-
-            if (normalizedDelta >= MIN_ROTATION_DELTA) {
-                lastMapRotationTime = now
-                lastSentRotation = newRotation
-                Logger.v(TAG, "Rotating map to $newRotation (delta=$normalizedDelta)")
-                onRotationChanged(newRotation)
-            }
+        if (normalizedDelta >= AppConstants.Map.MIN_ROTATION_DELTA) {
+            lastMapRotationTime = now
+            lastSentRotation = newRotation
+            onRotationChanged(newRotation)
         }
+    }
+
+    /**
+     * Lisse un angle pour éviter les sauts brusques
+     */
+    /**
+     * Lisse un angle pour eviter les sauts brusques
+     */
+    private fun smoothAngle(target: Float, current: Float): Float {
+        var delta = target - current
+
+        // Normaliser entre -180 et 180
+        if (delta > 180) delta -= 360
+        if (delta < -180) delta += 360
+
+        // Seuil de securite pour eviter les tremblements
+        if (abs(delta) < AppConstants.Compass.SMOOTH_ANGLE_THRESHOLD_MIN) {
+            return current
+        }
+
+        // Calculer le pas avec interpolation
+        var step = delta * AppConstants.Compass.SMOOTH_ALPHA
+
+        // Garantir un pas minimum pour eviter les saccades en fin de rotation
+        if (abs(step) < AppConstants.Compass.SMOOTH_MIN_STEP && abs(delta) >= AppConstants.Compass.SMOOTH_ANGLE_THRESHOLD_MIN) {
+            step = AppConstants.Compass.SMOOTH_MIN_STEP * sign(delta)
+        }
+
+        return current + step
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -241,33 +283,9 @@ class CompassManager(
     }
 
     /**
-     * Lisse un angle pour éviter les sauts brusques
-     */
-    /*private fun smoothAngle(target: Float, current: Float): Float {
-        var delta = target - current
-        
-        // Normaliser entre -180 et 180
-        if (delta > 180) delta -= 360
-        if (delta < -180) delta += 360
-
-        // Appliquer un facteur de lissage adaptatif
-        val alpha = if (abs(delta) < AppConstants.Compass.SMOOTH_ANGLE_THRESHOLD) {
-            AppConstants.Compass.SMOOTH_ALPHA_SMALL
-        } else {
-            AppConstants.Compass.SMOOTH_ALPHA_LARGE
-        }
-
-        val smoothed = current + delta * alpha
-        
-        // Logger.v(TAG, "smoothAngle: target=$target, current=$current, delta=$delta, alpha=$alpha, result=$smoothed")
-        
-        return smoothed
-    }*/
-
-    /**
      * Lisse un angle avec une vitesse constante pour eviter les sauts brusques
      */
-    private fun smoothAngle(target: Float, current: Float): Float {
+    /*private fun smoothAngle(target: Float, current: Float): Float {
         var delta = target - current
 
         // Normaliser entre -180 et 180
@@ -275,16 +293,16 @@ class CompassManager(
         if (delta < -180) delta += 360
 
         // Si le delta est tres petit, aller directement a la cible
-        if (abs(delta) < ROTATION_SPEED_DEGREES_PER_UPDATE) {
+        if (abs(delta) < AppConstants.Map.ROTATION_SPEED_DEGREES_PER_UPDATE) {
             return target
         }
 
         // Avancer a vitesse constante dans la direction de la cible
         val direction = if (delta > 0) 1f else -1f
-        val smoothed = current + direction * ROTATION_SPEED_DEGREES_PER_UPDATE
+        val smoothed = current + direction * AppConstants.Map.ROTATION_SPEED_DEGREES_PER_UPDATE
 
         return smoothed
-    }
+    }*/
 
     /**
      * Reset l'état du compass

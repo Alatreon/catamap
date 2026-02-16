@@ -19,3 +19,21 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Garder les classes de modeles (pour Gson/serialisation)
+-keep class com.brewdog.catamap.data.models.** { *; }
+-keep class com.brewdog.catamap.domain.annotation.models.** { *; }
+
+# SubsamplingScaleImageView
+-keep class com.davemorrissey.labs.subscaleview.** { *; }
+
+# Material Components
+-keep class com.google.android.material.** { *; }
+
+# Supprimer les logs en release
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+}

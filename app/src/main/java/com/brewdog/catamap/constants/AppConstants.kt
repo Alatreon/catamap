@@ -10,6 +10,8 @@ object AppConstants {
         const val MAX_SCALE = 2.0f
         const val DEFAULT_ROTATION = 0f
         const val ROTATION_SMOOTHING_BUFFER_SIZE = 3
+        const val MIN_ROTATION_DELTA = 2f
+        const val ROTATION_SPEED_DEGREES_PER_UPDATE = 3f
         const val MAX_ROTATION_DELTA = 10f
         const val MAX_DECODER_THREADS = 4
         const val MIN_DECODER_THREADS = 2
@@ -18,11 +20,13 @@ object AppConstants {
 
     // COMPASS CONFIGURATION
     object Compass {
-        const val SENSOR_UPDATE_INTERVAL_MS = 50L
-        const val MAP_ROTATION_INTERVAL_MS = 20L
-        const val SMOOTH_ANGLE_THRESHOLD = 5f
-        const val SMOOTH_ALPHA_SMALL = 0.03f
-        const val SMOOTH_ALPHA_LARGE = 0.08f
+        const val SENSOR_UPDATE_INTERVAL_MS = 16L
+        const val MAP_ROTATION_INTERVAL_MS = 16L
+        /** Seuil minimum de rotation pour eviter les tremblements (en degres) */
+        const val SMOOTH_ANGLE_THRESHOLD_MIN = 5f
+        /** Facteur d'interpolation pour le lissage de la rotation */
+        const val SMOOTH_ALPHA = 0.15f
+        const val SMOOTH_MIN_STEP = 2f
     }
     
     // MINIMAP CONFIGURATION

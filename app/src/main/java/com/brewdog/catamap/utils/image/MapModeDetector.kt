@@ -4,9 +4,9 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Log
 import androidx.palette.graphics.Palette
 import androidx.core.graphics.get
+import com.brewdog.catamap.utils.logging.Logger
 
 /**
  * Utilitaire pour détecter automatiquement si une image de carte est en mode clair ou sombre
@@ -161,7 +161,7 @@ object MapModeDetector {
                 }
             }
         } catch (e: Exception) {
-            Log.e("MapModeDetector", "Error loading bitmap", e)
+            Logger.e("MapModeDetector", "Error loading bitmap", e)
             null
         }
     }
@@ -188,7 +188,7 @@ object MapModeDetector {
             darkVotes >= methods.size / 2
 
         } catch (e: Exception) {
-            Log.e("MapModeDetector", "Error detecting mode", e)
+            Logger.e("MapModeDetector", "Error detecting mode", e)
             false
         } finally {
             bitmap?.recycle()

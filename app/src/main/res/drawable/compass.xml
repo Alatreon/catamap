@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <!-- Fleche Nord (rouge) -->
+    <path
+        android:fillColor="#D32F2F"
+        android:pathData="M24,4 L28,24 L24,20 L20,24 Z" />
+
+    <!-- Fleche Sud (grise) -->
+    <path
+        android:fillColor="#757575"
+        android:pathData="M24,44 L28,24 L24,28 L20,24 Z" />
+
+</vector>

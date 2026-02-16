@@ -5,7 +5,6 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +22,7 @@ import kotlinx.coroutines.*
 import java.text.SimpleDateFormat
 import java.util.*
 import com.brewdog.catamap.data.models.Category
+import com.brewdog.catamap.utils.logging.Logger
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class AddEditMapDialog : DialogFragment() {
@@ -206,7 +206,7 @@ class AddEditMapDialog : DialogFragment() {
 
             } catch (e: CancellationException) {
                 // Gestion normale de l'annulation
-                Log.d("AddEditMapDialog", "Traitement image annulé")
+                Logger.d("AddEditMapDialog", "Traitement image annulé")
 
             } catch (e: Exception) {
                 // Gestion des autres erreurs

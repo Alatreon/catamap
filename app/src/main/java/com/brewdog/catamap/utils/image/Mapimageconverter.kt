@@ -3,13 +3,13 @@ package com.brewdog.catamap.utils.image
 import android.content.Context
 import android.graphics.*
 import android.net.Uri
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import androidx.core.graphics.scale
 import androidx.core.graphics.createBitmap
+import com.brewdog.catamap.utils.logging.Logger
 
 object MapImageConverter {
 
@@ -33,34 +33,34 @@ object MapImageConverter {
             // 1. Obtenir les DIMENSIONS EXACTES de l'image source
             val originalDimensions = getImageDimensions(context, sourceUri)
             if (originalDimensions == null) {
-                Log.e("MapImageConverter", "Cannot get original dimensions")
+                Logger.e("MapImageConverter", "Cannot get original dimensions")
                 return@withContext null
             }
 
             val (originalWidth, originalHeight) = originalDimensions
-            Log.d("MapImageConverter", "Original dimensions: ${originalWidth}x${originalHeight}")
+            Logger.d("MapImageConverter", "Original dimensions: ${originalWidth}x${originalHeight}")
 
             // 2. Charger l'image source
             sourceBitmap = loadBitmapFullSize(context, sourceUri)
             if (sourceBitmap == null) {
-                Log.e("MapImageConverter", "Cannot load source bitmap")
+                Logger.e("MapImageConverter", "Cannot load source bitmap")
                 return@withContext null
             }
 
-            Log.d("MapImageConverter", "Loaded bitmap: ${sourceBitmap.width}x${sourceBitmap.height}")
+            Logger.d("MapImageConverter", "Loaded bitmap: ${sourceBitmap.width}x${sourceBitmap.height}")
 
             // 3. Appliquer la transformation (inversion des couleurs)
             transformedBitmap = applyColorMatrix(sourceBitmap, getInvertMatrix())
 
             // 4. FORCER le redimensionnement exact aux dimensions originales
             finalBitmap = if (transformedBitmap.width != originalWidth || transformedBitmap.height != originalHeight) {
-                Log.d("MapImageConverter", "Resizing from ${transformedBitmap.width}x${transformedBitmap.height} to ${originalWidth}x${originalHeight}")
+                Logger.d("MapImageConverter", "Resizing from ${transformedBitmap.width}x${transformedBitmap.height} to ${originalWidth}x${originalHeight}")
                 val resized = transformedBitmap.scale(originalWidth, originalHeight)
                 transformedBitmap.recycle()
                 transformedBitmap = null
                 resized
             } else {
-                Log.d("MapImageConverter", "Dimensions already match, no resize needed")
+                Logger.d("MapImageConverter", "Dimensions already match, no resize needed")
                 transformedBitmap
             }
 
@@ -73,12 +73,12 @@ object MapImageConverter {
             FileOutputStream(outputFile).use { out ->
                 finalBitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
             }
-            Log.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
+            Logger.d("MapImageConverter", "Generated: ${finalBitmap.width}x${finalBitmap.height} → ${outputFile.name}")
 
             return@withContext Uri.fromFile(outputFile)
 
         } catch (e: Exception) {
-            Log.e("MapImageConverter", "Error in conversion", e)
+            Logger.e("MapImageConverter", "Error in conversion", e)
             return@withContext null
         } finally {
             // Garantir la libération de tous les bitmaps, même en cas d'erreur
@@ -101,7 +101,7 @@ object MapImageConverter {
                 Pair(options.outWidth, options.outHeight)
             }
         } catch (e: Exception) {
-            Log.e("MapImageConverter", "Error getting dimensions", e)
+            Logger.e("MapImageConverter", "Error getting dimensions", e)
             null
         }
     }
@@ -118,7 +118,7 @@ object MapImageConverter {
                 BitmapFactory.decodeStream(stream, null, options)
             }
         } catch (e: Exception) {
-            Log.e("MapImageConverter", "Error loading bitmap", e)
+            Logger.e("MapImageConverter", "Error loading bitmap", e)
             null
         }
     }

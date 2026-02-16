@@ -3,7 +3,6 @@ package com.brewdog.catamap.data.repository
 import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
-import android.util.Log
 import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.brewdog.catamap.constants.AppConstants
@@ -208,11 +207,11 @@ class MapRepository(private val context: Context) {
                     val file = File(path)
                     if (file.exists()) {
                         file.delete()
-                        Log.d("MapRepository", "Deleted file: ${file.name}")
+                        Logger.d("MapRepository", "Deleted file: ${file.name}")
                     }
                 }
             } catch (e: Exception) {
-                Log.e("MapRepository", "Error deleting file", e)
+                Logger.e("MapRepository", "Error deleting file", e)
             }
         }
     }
